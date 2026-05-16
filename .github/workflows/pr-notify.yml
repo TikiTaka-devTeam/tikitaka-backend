@@ -1,0 +1,18 @@
+name: PR Discord Notification
+
+on:
+  pull_request:
+    types: [opened]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Notify Discord PR opened
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d "{
+              \"content\": \"🔔[BACKEND] PR이 생성되었습니다. \nRepository: ${{ github.repository }}\nTitle: ${{ github.event.pull_request.title }}\nAuthor: ${{ github.event.pull_request.user.login }}\nBranch: ${{ github.event.pull_request.head.ref }} → ${{ github.event.pull_request.base.ref }}\nURL: ${{ github.event.pull_request.html_url }}\"
+            }" \
+            ${{ secrets.DISCORD_WEBHOOK_URL }}

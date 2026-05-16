@@ -51,3 +51,21 @@ jobs:
             --cluster ${{ secrets.ECS_CLUSTER }} \
             --service ${{ secrets.ECS_SERVICE }} \
             --force-new-deployment
+
+      - name: Notify Discord deploy success
+        if: success()
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d "{
+              \"content\": \"✅[BACKEND] 배포 성공\nRepository: ${{ github.repository }}\nBranch: ${{ github.ref_name }}\nECS Service: ${{ secrets.ECS_SERVICE }}\"
+            }" \
+            ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+      - name: Notify Discord deploy failure
+        if: failure()
+        run: |
+          curl -H "Content-Type: application/json" \
+            -d "{
+              \"content\": \"❌[BACKEND] 배포 실패\nRepository: ${{ github.repository }}\nBranch: ${{ github.ref_name }}\nActions / ECS 로그 확인 필요\"
+            }" \
+            ${{ secrets.DISCORD_WEBHOOK_URL }}
