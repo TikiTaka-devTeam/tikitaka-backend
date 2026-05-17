@@ -1,6 +1,7 @@
 package com.tikitaka.backend.auth.entity;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 import org.hibernate.annotations.UuidGenerator;
 
@@ -18,10 +19,10 @@ public class Auth {
     @Id
     @UuidGenerator // UUID를 자동으로 생성하는 어노테이션
     @Column(name = "auth_id", updatable = false, nullable = false)
-    private Long authId;
+    private UUID authId;
 
     @Column(name = "user_id", nullable = false)
-    private Long userId;
+    private UUID userId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -35,4 +36,9 @@ public class Auth {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = LocalDateTime.now();
+    }
 }

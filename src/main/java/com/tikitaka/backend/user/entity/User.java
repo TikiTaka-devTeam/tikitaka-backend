@@ -6,14 +6,13 @@ import java.util.UUID;
 import org.hibernate.annotations.UuidGenerator;
 
 import jakarta.persistence.*;
+import lombok.Builder;
 import lombok.Getter;
-import lombok.Setter;
 import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "users")
 @Getter
-@Setter
 @NoArgsConstructor // 파라미터가 없는 기본 생성자 생성 -> JPA에서 엔티티 클래스를 인스턴스화할 때 필요
 public class User {
     @Id
@@ -54,4 +53,31 @@ public class User {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    // @Builder - 외부에서 설정 가능한 필드만 노출
+    @Builder
+    public User(String email, String password, String name, Role role,
+                String phoneNumber, String univ, String major,
+                String memberIdNumber, String profileUrl) {
+        this.email = email;
+        this.password = password;
+        this.name = name;
+        this.role = role;
+        this.phoneNumber = phoneNumber;
+        this.univ = univ;
+        this.major = major;
+        this.memberIdNumber = memberIdNumber;
+        this.profileUrl = profileUrl;
+    }
 }

@@ -35,7 +35,7 @@ out/
 
 ### VS Code ###
 .vscode/
-src/main/resources/application.yml
+.env
 
 ### Postman local files ###
 .postman/

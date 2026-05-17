@@ -1,4 +1,4 @@
-package com.tikitaka.backend.auth;
+package com.tikitaka.backend.auth.repository;
 
 import java.util.Optional;
 import java.util.UUID;
