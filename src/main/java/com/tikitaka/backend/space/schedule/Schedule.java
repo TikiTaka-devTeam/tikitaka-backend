@@ -1,4 +1,4 @@
-package com.tikitaka.backend.spaces.schedules;
+package com.tikitaka.backend.space.schedule;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -9,7 +9,7 @@ import java.util.UUID;
 
 import org.hibernate.annotations.UuidGenerator;
 
-import com.tikitaka.backend.spaces.entity.Space;
+import com.tikitaka.backend.space.entity.Space;
  
 @Entity
 @Table(name = "schedules")

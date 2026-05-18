@@ -1,4 +1,4 @@
-package com.tikitaka.backend.spaces.entity;
+package com.tikitaka.backend.space.entity;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
