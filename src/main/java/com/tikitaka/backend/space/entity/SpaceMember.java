@@ -1,4 +1,4 @@
-package com.tikitaka.backend.space.member;
+package com.tikitaka.backend.space.entity;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -6,7 +6,6 @@ import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UuidGenerator;
 
-import com.tikitaka.backend.space.entity.Space;
 import com.tikitaka.backend.user.entity.User;
 
 import jakarta.persistence.*;

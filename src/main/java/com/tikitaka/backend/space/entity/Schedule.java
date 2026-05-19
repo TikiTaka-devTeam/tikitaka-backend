@@ -1,27 +1,21 @@
-package com.tikitaka.backend.space.notice;
+package com.tikitaka.backend.space.entity;
+
+import jakarta.persistence.*;
+import lombok.*;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.UUID;
 
 import org.hibernate.annotations.UuidGenerator;
 
-import com.tikitaka.backend.space.entity.Space;
-import com.tikitaka.backend.user.entity.User;
-
-import jakarta.persistence.*;
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-
 @Entity
-@Table(name = "space_notices")
+@Table(name = "schedules")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
-public class SpaceNotice {
+public class Schedule {
  
     @Id
     @UuidGenerator
@@ -32,21 +26,20 @@ public class SpaceNotice {
     @JoinColumn(name = "space_id", nullable = false)
     private Space space;
  
-    // 공지 작성자 (교수)
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "professor_id", nullable = false)
-    private User professor;
+    // DB에는 VARCHAR, Java에서 ENUM으로 관리
+    // MONDAY ~ SUNDAY
+    @Column(name = "day", length = 10, nullable = false)
+    private String day;
  
-    @Column(name = "title", length = 255, nullable = false)
-    private String title;
+    @Column(name = "start_time", nullable = false)
+    private LocalTime startTime;
  
-    @Column(name = "content", columnDefinition = "TEXT", nullable = false)
-    private String content;
+    @Column(name = "end_time", nullable = false)
+    private LocalTime endTime;
  
-    // 상단 고정 여부
-    @Column(name = "is_pinned", nullable = false)
-    @Builder.Default
-    private Boolean isPinned = false;
+    // ISO 8601 기준 타임존 (ex. "Asia/Seoul")
+    @Column(name = "timezone", length = 30, nullable = false)
+    private String timezone;
  
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
