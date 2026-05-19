@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -17,6 +18,7 @@ import com.tikitaka.backend.global.config.SwaggerConfig;
 import com.tikitaka.backend.global.jwt.JwtProvider;
 import com.tikitaka.backend.space.dto.CreateSpaceRequest;
 import com.tikitaka.backend.space.dto.CreateSpaceResponse;
+import com.tikitaka.backend.space.dto.SpaceCodeResponse;
 import com.tikitaka.backend.space.dto.SpaceSummaryResponse;
 import com.tikitaka.backend.space.service.SpaceService;
 
@@ -67,6 +69,36 @@ public class SpaceController {
 
         UUID userId = UUID.fromString(jwtProvider.extractUserId(accessToken));
         List<SpaceSummaryResponse> response = spaceService.getMySpaces(userId);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{space_id}/code")
+    @Operation(
+        summary = "강의 초대 코드 조회",
+        description = "교수 사용자가 자신이 생성한 강의의 초대 코드를 조회합니다."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "강의 초대 코드 조회 성공",
+            content = @Content(schema = @Schema(implementation = SpaceCodeResponse.class))
+        ),
+        @ApiResponse(responseCode = "401", description = "유효하지 않은 액세스 토큰"),
+        @ApiResponse(responseCode = "403", description = "교수 권한이 아니거나 본인 강의가 아닌 경우"),
+        @ApiResponse(responseCode = "404", description = "요청 사용자 또는 강의를 찾을 수 없음")
+    })
+    public ResponseEntity<SpaceCodeResponse> getSpaceCode(
+        @Parameter(hidden = true)
+        @RequestHeader("Authorization") String authHeader,
+        @Parameter(description = "강의 ID", example = "123e4567-e89b-12d3-a456-426614174000")
+        @PathVariable("space_id") UUID spaceId
+    ) {
+        String accessToken = extractBearerToken(authHeader);
+        jwtProvider.isTokenValid(accessToken);
+
+        UUID professorId = UUID.fromString(jwtProvider.extractUserId(accessToken));
+        SpaceCodeResponse response = spaceService.getSpaceCode(professorId, spaceId);
 
         return ResponseEntity.ok(response);
     }

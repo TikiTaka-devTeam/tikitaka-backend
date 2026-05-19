@@ -17,6 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.tikitaka.backend.space.dto.CreateScheduleRequest;
 import com.tikitaka.backend.space.dto.CreateSpaceRequest;
 import com.tikitaka.backend.space.dto.CreateSpaceResponse;
+import com.tikitaka.backend.space.dto.SpaceCodeResponse;
 import com.tikitaka.backend.space.dto.SpaceSummaryResponse;
 import com.tikitaka.backend.space.entity.Schedule;
 import com.tikitaka.backend.space.entity.Space;
@@ -112,6 +113,25 @@ public class SpaceService {
             space.getColor(),
             space.getSpaceCode()
         );
+    }
+
+    @Transactional(readOnly = true)
+    public SpaceCodeResponse getSpaceCode(UUID professorId, UUID spaceId) {
+        User professor = userRepository.findById(professorId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+
+        if (professor.getRole() != Role.PROFESSOR) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "교수만 강의 초대 코드를 조회할 수 있습니다.");
+        }
+
+        Space space = spaceRepository.findById(spaceId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "강의를 찾을 수 없습니다."));
+
+        if (!space.getProfessor().getId().equals(professorId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인이 생성한 강의의 초대 코드만 조회할 수 있습니다.");
+        }
+
+        return new SpaceCodeResponse(space.getId(), space.getSpaceCode());
     }
 
     private String generateUniqueSpaceCode() {
