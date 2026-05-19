@@ -40,3 +40,6 @@ out/
 ### Postman local files ###
 .postman/
 postman/
+
+### MAC OS ###
+.DS_Store
