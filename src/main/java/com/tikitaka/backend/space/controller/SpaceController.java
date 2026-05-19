@@ -1,9 +1,11 @@
 package com.tikitaka.backend.space.controller;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -14,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.tikitaka.backend.global.jwt.JwtProvider;
 import com.tikitaka.backend.space.dto.CreateSpaceRequest;
 import com.tikitaka.backend.space.dto.CreateSpaceResponse;
+import com.tikitaka.backend.space.dto.SpaceSummaryResponse;
 import com.tikitaka.backend.space.service.SpaceService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,6 +37,36 @@ public class SpaceController {
 
     private final SpaceService spaceService;
     private final JwtProvider jwtProvider;
+
+    @GetMapping
+    @Operation(
+        summary = "내 강의 목록 조회",
+        description = "현재 로그인한 사용자가 승인된 상태로 참여 중인 강의 목록을 조회합니다."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "강의 목록 조회 성공",
+            content = @Content(schema = @Schema(implementation = SpaceSummaryResponse.class))
+        ),
+        @ApiResponse(responseCode = "401", description = "유효하지 않은 액세스 토큰"),
+        @ApiResponse(responseCode = "404", description = "요청 사용자를 찾을 수 없음")
+    })
+    public ResponseEntity<List<SpaceSummaryResponse>> getMySpaces(
+        @Parameter(
+            description = "Bearer 액세스 토큰",
+            example = "Bearer eyJhbGciOiJIUzI1NiJ9..."
+        )
+        @RequestHeader("Authorization") String authHeader
+    ) {
+        String accessToken = extractBearerToken(authHeader);
+        jwtProvider.isTokenValid(accessToken);
+
+        UUID userId = UUID.fromString(jwtProvider.extractUserId(accessToken));
+        List<SpaceSummaryResponse> response = spaceService.getMySpaces(userId);
+
+        return ResponseEntity.ok(response);
+    }
 
     @PostMapping
     @Operation(

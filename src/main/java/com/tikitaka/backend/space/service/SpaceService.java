@@ -3,6 +3,7 @@ package com.tikitaka.backend.space.service;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -16,6 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.tikitaka.backend.space.dto.CreateScheduleRequest;
 import com.tikitaka.backend.space.dto.CreateSpaceRequest;
 import com.tikitaka.backend.space.dto.CreateSpaceResponse;
+import com.tikitaka.backend.space.dto.SpaceSummaryResponse;
 import com.tikitaka.backend.space.entity.Schedule;
 import com.tikitaka.backend.space.entity.Space;
 import com.tikitaka.backend.space.entity.SpaceMember;
@@ -46,6 +48,14 @@ public class SpaceService {
     private final ScheduleRepository scheduleRepository;
     private final SpaceMemberRepository spaceMemberRepository;
     private final UserRepository userRepository;
+
+    @Transactional(readOnly = true)
+    public List<SpaceSummaryResponse> getMySpaces(UUID userId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+
+        return spaceMemberRepository.findApprovedSpacesByUserId(user.getId());
+    }
 
     public CreateSpaceResponse createSpace(UUID professorId, CreateSpaceRequest request) {
         User professor = userRepository.findById(professorId)
