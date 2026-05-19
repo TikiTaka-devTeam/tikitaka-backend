@@ -26,11 +26,13 @@ import com.tikitaka.backend.user.entity.Role;
 import com.tikitaka.backend.user.entity.User;
 import com.tikitaka.backend.user.repository.UserRepository;
 
+import io.swagger.v3.oas.annotations.Hidden;
 import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
 @Transactional
+@Hidden
 public class SpaceService {
 
     private static final String DEFAULT_TIMEZONE = "Asia/Seoul";

@@ -7,12 +7,21 @@ import org.hibernate.annotations.UuidGenerator;
 
 import com.tikitaka.backend.user.entity.User;
 
-import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "spaces")
@@ -20,35 +29,42 @@ import lombok.Builder;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
+@Schema(description = "강의 엔티티")
 public class Space {
- 
+
     @Id
     @UuidGenerator
     @Column(name = "id", updatable = false, nullable = false)
+    @Schema(description = "강의 ID")
     private UUID id;
- 
-    // 강의 개설자 (교수)
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "professor_id", nullable = false)
+    @Schema(description = "강의를 생성한 교수")
     private User professor;
- 
+
     @Column(name = "name", length = 255, nullable = false)
-    private String name; // ex) "운영체제"
- 
+    @Schema(description = "강의명", example = "운영체제")
+    private String name;
+
     @Column(name = "semester", length = 20, nullable = false)
-    private String semester; // ex) "2026-1"
- 
-    // 학생 참여용 자동 생성 코드 (8자리 UNIQUE)
+    @Schema(description = "학기", example = "2026-1")
+    private String semester;
+
     @Column(name = "space_code", length = 8, unique = true, nullable = false)
+    @Schema(description = "학생 참여용 초대 코드", example = "A1B2C3D4")
     private String spaceCode;
- 
+
     @Column(name = "color", length = 20)
-    private String color; // 강의 대표 색상
- 
+    @Schema(description = "강의 대표 색상", example = "#4F46E5")
+    private String color;
+
     @Column(name = "created_at", nullable = false, updatable = false)
+    @Schema(description = "생성 시각")
     private LocalDateTime createdAt;
 
     @Column(name = "updated_at")
+    @Schema(description = "수정 시각")
     private LocalDateTime updatedAt;
 
     @PrePersist

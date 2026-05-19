@@ -16,19 +16,46 @@ import com.tikitaka.backend.space.dto.CreateSpaceRequest;
 import com.tikitaka.backend.space.dto.CreateSpaceResponse;
 import com.tikitaka.backend.space.service.SpaceService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/v1/spaces")
 @RequiredArgsConstructor
+@Tag(name = "Space", description = "강의 생성, 조회, 참여 요청 등 강의 공간 관련 API")
 public class SpaceController {
 
     private final SpaceService spaceService;
     private final JwtProvider jwtProvider;
 
     @PostMapping
+    @Operation(
+        summary = "강의 생성",
+        description = "교수 사용자가 강의를 생성하고 초대 코드를 발급합니다. 요청에 포함된 시간표도 함께 저장됩니다."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "201",
+            description = "강의 생성 성공",
+            content = @Content(schema = @Schema(implementation = CreateSpaceResponse.class))
+        ),
+        @ApiResponse(responseCode = "400", description = "잘못된 요청 값"),
+        @ApiResponse(responseCode = "401", description = "유효하지 않은 액세스 토큰"),
+        @ApiResponse(responseCode = "403", description = "교수 권한이 아닌 사용자의 요청"),
+        @ApiResponse(responseCode = "404", description = "요청 사용자를 찾을 수 없음")
+    })
     public ResponseEntity<CreateSpaceResponse> createSpace(
+        @Parameter(
+            description = "Bearer 액세스 토큰",
+            example = "Bearer eyJhbGciOiJIUzI1NiJ9..."
+        )
         @RequestHeader("Authorization") String authHeader,
         @RequestBody @Valid CreateSpaceRequest request
     ) {
