@@ -29,7 +29,7 @@ public interface DashboardRepository extends JpaRepository<SpaceMember, UUID> {
     @Query("""
         SELECT sc FROM Schedule sc
         JOIN FETCH sc.space s
-        JOIN sm ON sm.space.id = s.id
+        JOIN SpaceMember sm ON sm.space.id = s.id
         WHERE sm.user.id = :userId
         AND sm.validity = 'APPROVED'
         ORDER BY sc.day, sc.startTime
