@@ -18,6 +18,8 @@ import com.tikitaka.backend.global.config.SwaggerConfig;
 import com.tikitaka.backend.global.jwt.JwtProvider;
 import com.tikitaka.backend.space.dto.CreateSpaceRequest;
 import com.tikitaka.backend.space.dto.CreateSpaceResponse;
+import com.tikitaka.backend.space.dto.JoinSpaceRequest;
+import com.tikitaka.backend.space.dto.JoinSpaceResponse;
 import com.tikitaka.backend.space.dto.SpaceCodeResponse;
 import com.tikitaka.backend.space.dto.SpaceSummaryResponse;
 import com.tikitaka.backend.space.service.SpaceService;
@@ -37,16 +39,16 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/v1/spaces")
 @RequiredArgsConstructor
-@Tag(name = "Space", description = "강의 공간 관련 API")
+@Tag(name = "Main Space", description = "메인 스페이스 관련 API")
 @SecurityRequirement(name = SwaggerConfig.BEARER_SCHEME_NAME)
-public class SpaceController {
+public class MainSpaceController {
 
     private final SpaceService spaceService;
     private final JwtProvider jwtProvider;
 
     @GetMapping
     @Operation(
-        summary = "내 강의 목록 조회",
+        summary = "내가 속한 강의 목록 조회",
         description = "현재 로그인한 사용자가 승인된 상태로 참여 중인 강의 목록을 조회합니다."
     )
     @ApiResponses({
@@ -71,6 +73,37 @@ public class SpaceController {
         List<SpaceSummaryResponse> response = spaceService.getMySpaces(userId);
 
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/join")
+    @Operation(
+        summary = "학생이 초대 코드로 강의 참여 요청",
+        description = "학생 사용자가 강의 초대 코드로 강의 참여를 요청합니다."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "201",
+            description = "강의 참여 요청 성공",
+            content = @Content(schema = @Schema(implementation = JoinSpaceResponse.class))
+        ),
+        @ApiResponse(responseCode = "400", description = "잘못된 요청 값"),
+        @ApiResponse(responseCode = "401", description = "유효하지 않은 액세스 토큰"),
+        @ApiResponse(responseCode = "403", description = "학생 권한이 아닌 사용자의 요청"),
+        @ApiResponse(responseCode = "404", description = "요청 사용자 또는 초대 코드에 해당하는 강의를 찾을 수 없음"),
+        @ApiResponse(responseCode = "409", description = "이미 참여 중이거나 참여 요청한 강의")
+    })
+    public ResponseEntity<JoinSpaceResponse> joinSpace(
+        @Parameter(hidden = true)
+        @RequestHeader("Authorization") String authHeader,
+        @RequestBody @Valid JoinSpaceRequest request
+    ) {
+        String accessToken = extractBearerToken(authHeader);
+        jwtProvider.isTokenValid(accessToken);
+
+        UUID studentId = UUID.fromString(jwtProvider.extractUserId(accessToken));
+        JoinSpaceResponse response = spaceService.joinSpace(studentId, request);
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping("/{space_id}/code")
