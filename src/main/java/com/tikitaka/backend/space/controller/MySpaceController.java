@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.tikitaka.backend.global.config.SwaggerConfig;
 import com.tikitaka.backend.global.jwt.JwtProvider;
+import com.tikitaka.backend.space.dto.SpaceMemberStatusResponse;
 import com.tikitaka.backend.space.dto.SpaceMemberSummaryResponse;
 import com.tikitaka.backend.space.service.SpaceService;
 
@@ -70,6 +72,70 @@ public class MySpaceController {
 
         UUID professorId = UUID.fromString(jwtProvider.extractUserId(accessToken));
         List<SpaceMemberSummaryResponse> response = spaceService.getSpaceMembers(professorId, spaceId, validity);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @PatchMapping("/{space_id}/members/{member_id}/approve")
+    @Operation(
+        summary = "학생 참여 요청 승인",
+        description = "교수 사용자가 학생의 강의 참여 요청을 승인합니다."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "학생 참여 요청 승인 성공",
+            content = @Content(schema = @Schema(implementation = SpaceMemberStatusResponse.class))
+        ),
+        @ApiResponse(responseCode = "401", description = "유효하지 않은 액세스 토큰"),
+        @ApiResponse(responseCode = "403", description = "교수 권한이 아니거나 본인 강의가 아닌 경우"),
+        @ApiResponse(responseCode = "404", description = "요청 사용자, 강의 또는 참여 요청을 찾을 수 없음")
+    })
+    public ResponseEntity<SpaceMemberStatusResponse> approveSpaceMember(
+        @Parameter(hidden = true)
+        @RequestHeader("Authorization") String authHeader,
+        @Parameter(description = "강의 ID", example = "123e4567-e89b-12d3-a456-426614174000")
+        @PathVariable("space_id") UUID spaceId,
+        @Parameter(description = "강의 멤버 ID", example = "123e4567-e89b-12d3-a456-426614174111")
+        @PathVariable("member_id") UUID memberId
+    ) {
+        String accessToken = extractBearerToken(authHeader);
+        jwtProvider.isTokenValid(accessToken);
+
+        UUID professorId = UUID.fromString(jwtProvider.extractUserId(accessToken));
+        SpaceMemberStatusResponse response = spaceService.approveSpaceMember(professorId, spaceId, memberId);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @PatchMapping("/{space_id}/members/{member_id}/deny")
+    @Operation(
+        summary = "학생 참여 요청 거절",
+        description = "교수 사용자가 학생의 강의 참여 요청을 거절합니다."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "학생 참여 요청 거절 성공",
+            content = @Content(schema = @Schema(implementation = SpaceMemberStatusResponse.class))
+        ),
+        @ApiResponse(responseCode = "401", description = "유효하지 않은 액세스 토큰"),
+        @ApiResponse(responseCode = "403", description = "교수 권한이 아니거나 본인 강의가 아닌 경우"),
+        @ApiResponse(responseCode = "404", description = "요청 사용자, 강의 또는 참여 요청을 찾을 수 없음")
+    })
+    public ResponseEntity<SpaceMemberStatusResponse> denySpaceMember(
+        @Parameter(hidden = true)
+        @RequestHeader("Authorization") String authHeader,
+        @Parameter(description = "강의 ID", example = "123e4567-e89b-12d3-a456-426614174000")
+        @PathVariable("space_id") UUID spaceId,
+        @Parameter(description = "강의 멤버 ID", example = "123e4567-e89b-12d3-a456-426614174111")
+        @PathVariable("member_id") UUID memberId
+    ) {
+        String accessToken = extractBearerToken(authHeader);
+        jwtProvider.isTokenValid(accessToken);
+
+        UUID professorId = UUID.fromString(jwtProvider.extractUserId(accessToken));
+        SpaceMemberStatusResponse response = spaceService.denySpaceMember(professorId, spaceId, memberId);
 
         return ResponseEntity.ok(response);
     }

@@ -20,6 +20,7 @@ import com.tikitaka.backend.space.dto.CreateSpaceResponse;
 import com.tikitaka.backend.space.dto.JoinSpaceRequest;
 import com.tikitaka.backend.space.dto.JoinSpaceResponse;
 import com.tikitaka.backend.space.dto.SpaceCodeResponse;
+import com.tikitaka.backend.space.dto.SpaceMemberStatusResponse;
 import com.tikitaka.backend.space.dto.SpaceMemberSummaryResponse;
 import com.tikitaka.backend.space.dto.SpaceSummaryResponse;
 import com.tikitaka.backend.space.entity.Schedule;
@@ -172,6 +173,30 @@ public class SpaceService {
         return spaceMemberRepository.findMembersBySpaceIdAndValidity(spaceId, normalizedValidity);
     }
 
+    public SpaceMemberStatusResponse approveSpaceMember(UUID professorId, UUID spaceId, UUID memberId) {
+        SpaceMember member = getProfessorOwnedSpaceMember(professorId, spaceId, memberId);
+        member.approve(OffsetDateTime.now(ZoneOffset.UTC));
+
+        return new SpaceMemberStatusResponse(
+            member.getId(),
+            member.getSpace().getId(),
+            member.getUser().getId(),
+            member.getValidity()
+        );
+    }
+
+    public SpaceMemberStatusResponse denySpaceMember(UUID professorId, UUID spaceId, UUID memberId) {
+        SpaceMember member = getProfessorOwnedSpaceMember(professorId, spaceId, memberId);
+        member.deny(OffsetDateTime.now(ZoneOffset.UTC));
+
+        return new SpaceMemberStatusResponse(
+            member.getId(),
+            member.getSpace().getId(),
+            member.getUser().getId(),
+            member.getValidity()
+        );
+    }
+
     @Transactional(readOnly = true)
     public SpaceCodeResponse getSpaceCode(UUID professorId, UUID spaceId) {
         User professor = userRepository.findById(professorId)
@@ -189,6 +214,25 @@ public class SpaceService {
         }
 
         return new SpaceCodeResponse(space.getId(), space.getSpaceCode());
+    }
+
+    private SpaceMember getProfessorOwnedSpaceMember(UUID professorId, UUID spaceId, UUID memberId) {
+        User professor = userRepository.findById(professorId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+
+        if (professor.getRole() != Role.PROFESSOR) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "교수만 학생 참여 요청을 처리할 수 있습니다.");
+        }
+
+        Space space = spaceRepository.findById(spaceId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "강의를 찾을 수 없습니다."));
+
+        if (!space.getProfessor().getId().equals(professorId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인이 생성한 강의의 참여 요청만 처리할 수 있습니다.");
+        }
+
+        return spaceMemberRepository.findByIdAndSpaceId(memberId, spaceId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "강의 참여 요청을 찾을 수 없습니다."));
     }
 
     private String generateUniqueSpaceCode() {

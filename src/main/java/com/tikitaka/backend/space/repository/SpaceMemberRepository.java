@@ -49,4 +49,6 @@ public interface SpaceMemberRepository extends JpaRepository<SpaceMember, UUID> 
         @Param("spaceId") UUID spaceId,
         @Param("validity") String validity
     );
+
+    Optional<SpaceMember> findByIdAndSpaceId(UUID id, UUID spaceId);
 }
