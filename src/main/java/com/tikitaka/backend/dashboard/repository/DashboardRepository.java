@@ -1,7 +1,8 @@
 package com.tikitaka.backend.dashboard.repository;
 
-import com.tikitaka.backend.space.member.SpaceMember;
-import com.tikitaka.backend.space.schedule.Schedule;
+import com.tikitaka.backend.space.entity.Schedule;
+import com.tikitaka.backend.space.entity.SpaceMember;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

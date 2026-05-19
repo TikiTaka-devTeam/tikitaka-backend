@@ -6,7 +6,7 @@ import org.hibernate.annotations.UuidGenerator;
 
 import com.tikitaka.backend.document.entity.Document;
 import com.tikitaka.backend.question.answer.Answer;
-import com.tikitaka.backend.space.notice.SpaceNotice;
+import com.tikitaka.backend.space.entity.SpaceNotice;
 import com.tikitaka.backend.user.entity.User;
 
 import java.time.LocalDateTime;

@@ -1,4 +1,4 @@
-package com.tikitaka.backend.space.member;
+package com.tikitaka.backend.space.entity;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -6,10 +6,17 @@ import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UuidGenerator;
 
-import com.tikitaka.backend.space.entity.Space;
 import com.tikitaka.backend.user.entity.User;
 
-import jakarta.persistence.*;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -20,7 +27,6 @@ import lombok.NoArgsConstructor;
 @Table(
     name = "space_members",
     uniqueConstraints = {
-        // 한 space에 같은 user가 중복 참여 불가
         @UniqueConstraint(columnNames = {"space_id", "user_id"})
     }
 )
@@ -28,45 +34,48 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
+@Schema(description = "강의 참여자 엔티티")
 public class SpaceMember {
- 
+
     @Id
     @UuidGenerator
     @Column(name = "id", updatable = false, nullable = false)
+    @Schema(description = "강의 참여자 ID")
     private UUID id;
- 
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "space_id", nullable = false)
+    @Schema(description = "참여 중인 강의")
     private Space space;
- 
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
+    @Schema(description = "참여 사용자")
     private User user;
- 
-    // APPROVED / DENIED / PENDING
+
     @Column(name = "validity", length = 10, nullable = false)
     @Builder.Default
+    @Schema(description = "참여 승인 상태", example = "APPROVED")
     private String validity = "PENDING";
 
-    // 강의별 닉네임
     @Column(name = "nickname", length = 100)
+    @Schema(description = "사용자 기준 강의 별명", example = "운체")
     private String nickname;
- 
-    // 학생이 참여 요청한 시간
+
     @CreationTimestamp
     @Column(name = "requested_at", nullable = false, updatable = false, columnDefinition = "TIMESTAMPTZ DEFAULT NOW()")
+    @Schema(description = "참여 요청 시각")
     private OffsetDateTime requestedAt;
- 
-    // 교수가 승인한 시간 (NULL 가능)
-    @Column(name = "approved_at", columnDefinition = "TIMESTAMPTZ")
-    private OffsetDateTime approvedAt;
- 
-    // 교수가 거절한 시간 (NULL 가능)
-    @Column(name = "denied_at", columnDefinition = "TIMESTAMPTZ")
-    private OffsetDateTime deniedAt;
- 
-    // 최근 접속 시간 → recent space 정렬 기준
-    @Column(name = "last_accessed_at", columnDefinition = "TIMESTAMPTZ")
-    private OffsetDateTime lastAccessedAt;
 
+    @Column(name = "approved_at", columnDefinition = "TIMESTAMPTZ")
+    @Schema(description = "승인 시각")
+    private OffsetDateTime approvedAt;
+
+    @Column(name = "denied_at", columnDefinition = "TIMESTAMPTZ")
+    @Schema(description = "거절 시각")
+    private OffsetDateTime deniedAt;
+
+    @Column(name = "last_accessed_at", columnDefinition = "TIMESTAMPTZ")
+    @Schema(description = "최근 접속 시각")
+    private OffsetDateTime lastAccessedAt;
 }
