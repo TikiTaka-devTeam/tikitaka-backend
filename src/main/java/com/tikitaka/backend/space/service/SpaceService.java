@@ -17,6 +17,11 @@ import org.springframework.web.server.ResponseStatusException;
 import com.tikitaka.backend.space.dto.CreateScheduleRequest;
 import com.tikitaka.backend.space.dto.CreateSpaceRequest;
 import com.tikitaka.backend.space.dto.CreateSpaceResponse;
+import com.tikitaka.backend.space.dto.JoinSpaceRequest;
+import com.tikitaka.backend.space.dto.JoinSpaceResponse;
+import com.tikitaka.backend.space.dto.SpaceCodeResponse;
+import com.tikitaka.backend.space.dto.SpaceMemberStatusResponse;
+import com.tikitaka.backend.space.dto.SpaceMemberSummaryResponse;
 import com.tikitaka.backend.space.dto.SpaceSummaryResponse;
 import com.tikitaka.backend.space.entity.Schedule;
 import com.tikitaka.backend.space.entity.Space;
@@ -43,6 +48,7 @@ public class SpaceService {
     private static final Set<String> ALLOWED_DAYS = Set.of(
         "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"
     );
+    private static final Set<String> ALLOWED_MEMBER_VALIDITIES = Set.of("PENDING", "APPROVED", "DENIED");
 
     private final SpaceRepository spaceRepository;
     private final ScheduleRepository scheduleRepository;
@@ -112,6 +118,121 @@ public class SpaceService {
             space.getColor(),
             space.getSpaceCode()
         );
+    }
+
+    public JoinSpaceResponse joinSpace(UUID studentId, JoinSpaceRequest request) {
+        User student = userRepository.findById(studentId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+
+        if (student.getRole() != Role.STUDENT) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "학생만 강의 참여를 요청할 수 있습니다.");
+        }
+
+        Space space = spaceRepository.findBySpaceCode(request.spaceCode())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "초대 코드에 해당하는 강의를 찾을 수 없습니다."));
+
+        if (spaceMemberRepository.findBySpaceIdAndUserId(space.getId(), student.getId()).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 참여 중이거나 참여 요청한 강의입니다.");
+        }
+
+        SpaceMember spaceMember = spaceMemberRepository.save(SpaceMember.builder()
+            .space(space)
+            .user(student)
+            .validity("PENDING")
+            .build());
+
+        return new JoinSpaceResponse(
+            spaceMember.getId(),
+            space.getId(),
+            space.getName(),
+            spaceMember.getValidity()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public List<SpaceMemberSummaryResponse> getSpaceMembers(UUID professorId, UUID spaceId, String validity) {
+        User professor = userRepository.findById(professorId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+
+        if (professor.getRole() != Role.PROFESSOR) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "교수만 강의 참여자 목록을 조회할 수 있습니다.");
+        }
+
+        String normalizedValidity = validity.toUpperCase(Locale.ROOT);
+        if (!ALLOWED_MEMBER_VALIDITIES.contains(normalizedValidity)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "유효하지 않은 참여 상태입니다.");
+        }
+
+        Space space = spaceRepository.findById(spaceId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "강의를 찾을 수 없습니다."));
+
+        if (!space.getProfessor().getId().equals(professorId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인이 생성한 강의의 참여자 목록만 조회할 수 있습니다.");
+        }
+
+        return spaceMemberRepository.findMembersBySpaceIdAndValidity(spaceId, normalizedValidity);
+    }
+
+    public SpaceMemberStatusResponse approveSpaceMember(UUID professorId, UUID spaceId, UUID memberId) {
+        SpaceMember member = getProfessorOwnedSpaceMember(professorId, spaceId, memberId);
+        member.approve(OffsetDateTime.now(ZoneOffset.UTC));
+
+        return new SpaceMemberStatusResponse(
+            member.getId(),
+            member.getSpace().getId(),
+            member.getUser().getId(),
+            member.getValidity()
+        );
+    }
+
+    public SpaceMemberStatusResponse denySpaceMember(UUID professorId, UUID spaceId, UUID memberId) {
+        SpaceMember member = getProfessorOwnedSpaceMember(professorId, spaceId, memberId);
+        member.deny(OffsetDateTime.now(ZoneOffset.UTC));
+
+        return new SpaceMemberStatusResponse(
+            member.getId(),
+            member.getSpace().getId(),
+            member.getUser().getId(),
+            member.getValidity()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public SpaceCodeResponse getSpaceCode(UUID professorId, UUID spaceId) {
+        User professor = userRepository.findById(professorId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+
+        if (professor.getRole() != Role.PROFESSOR) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "교수만 강의 초대 코드를 조회할 수 있습니다.");
+        }
+
+        Space space = spaceRepository.findById(spaceId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "강의를 찾을 수 없습니다."));
+
+        if (!space.getProfessor().getId().equals(professorId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인이 생성한 강의의 초대 코드만 조회할 수 있습니다.");
+        }
+
+        return new SpaceCodeResponse(space.getId(), space.getSpaceCode());
+    }
+
+    private SpaceMember getProfessorOwnedSpaceMember(UUID professorId, UUID spaceId, UUID memberId) {
+        User professor = userRepository.findById(professorId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+
+        if (professor.getRole() != Role.PROFESSOR) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "교수만 학생 참여 요청을 처리할 수 있습니다.");
+        }
+
+        Space space = spaceRepository.findById(spaceId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "강의를 찾을 수 없습니다."));
+
+        if (!space.getProfessor().getId().equals(professorId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인이 생성한 강의의 참여 요청만 처리할 수 있습니다.");
+        }
+
+        return spaceMemberRepository.findByIdAndSpaceId(memberId, spaceId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "강의 참여 요청을 찾을 수 없습니다."));
     }
 
     private String generateUniqueSpaceCode() {

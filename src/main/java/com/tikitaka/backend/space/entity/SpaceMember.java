@@ -78,4 +78,16 @@ public class SpaceMember {
     @Column(name = "last_accessed_at", columnDefinition = "TIMESTAMPTZ")
     @Schema(description = "최근 접속 시각")
     private OffsetDateTime lastAccessedAt;
+
+    public void approve(OffsetDateTime approvedAt) {
+        this.validity = "APPROVED";
+        this.approvedAt = approvedAt;
+        this.deniedAt = null;
+    }
+
+    public void deny(OffsetDateTime deniedAt) {
+        this.validity = "DENIED";
+        this.deniedAt = deniedAt;
+        this.approvedAt = null;
+    }
 }
