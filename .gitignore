@@ -40,3 +40,5 @@ out/
 ### Postman local files ###
 .postman/
 postman/
+
+src/main/resources/application-local.properties
