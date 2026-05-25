@@ -14,6 +14,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import com.tikitaka.backend.space.dto.DocumentSummaryResponse;
+import com.tikitaka.backend.space.dto.CreateDocumentResponse;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import com.tikitaka.backend.global.config.SwaggerConfig;
 import com.tikitaka.backend.global.jwt.JwtProvider;
@@ -180,5 +186,49 @@ public class MySpaceController {
         List<DocumentSummaryResponse> response = spaceService.getDocuments(userId, spaceId);
 
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping(value = "/{space_id}/documents", consumes = "multipart/form-data")
+    @Operation(
+            summary = "새로운 강의자료 등록",
+            description = "교수 사용자가 본인이 생성한 강의에 새로운 PDF 강의자료를 등록합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "201",
+                    description = "강의자료 등록 성공",
+                    content = @Content(schema = @Schema(implementation = CreateDocumentResponse.class))
+            ),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청 또는 PDF가 아닌 파일"),
+            @ApiResponse(responseCode = "401", description = "유효하지 않은 액세스 토큰"),
+            @ApiResponse(responseCode = "403", description = "교수 권한이 아니거나 본인 강의가 아닌 경우"),
+            @ApiResponse(responseCode = "404", description = "사용자 또는 강의를 찾을 수 없음")
+    })
+    public ResponseEntity<CreateDocumentResponse> createDocument(
+            @Parameter(hidden = true)
+            @RequestHeader("Authorization") String authHeader,
+
+            @Parameter(description = "강의 ID", example = "123e4567-e89b-12d3-a456-426614174000")
+            @PathVariable("space_id") UUID spaceId,
+
+            @Parameter(description = "강의자료 제목", example = "운영체제 1주차")
+            @RequestPart("title") String title,
+
+            @Parameter(description = "PDF 파일")
+            @RequestPart("file") MultipartFile file
+    ) {
+        String accessToken = extractBearerToken(authHeader);
+        jwtProvider.isTokenValid(accessToken);
+
+        UUID professorId = UUID.fromString(jwtProvider.extractUserId(accessToken));
+
+        CreateDocumentResponse response = spaceService.createDocument(
+                professorId,
+                spaceId,
+                title,
+                file
+        );
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }
