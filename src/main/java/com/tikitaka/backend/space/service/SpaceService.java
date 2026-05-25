@@ -338,12 +338,12 @@ public class SpaceService {
         }
 
         String storedFileName = UUID.randomUUID() + "_" + originalFilename;
-        Path uploadDir = Paths.get("uploads", "materials");
-        Path filePath = uploadDir.resolve(storedFileName);
+        Path uploadDir = Paths.get(System.getProperty("user.dir"), "uploads", "materials").toAbsolutePath().normalize();
+        Path filePath = uploadDir.resolve(storedFileName).toAbsolutePath().normalize();
 
         try {
             Files.createDirectories(uploadDir);
-            file.transferTo(filePath.toFile());
+            Files.copy(file.getInputStream(), filePath);
         } catch (IOException e) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "파일 저장 중 오류가 발생했습니다.");
         }
