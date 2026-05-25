@@ -1,5 +1,9 @@
 package com.tikitaka.backend.space.service;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -8,6 +12,10 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+
+import com.tikitaka.backend.document.entity.Document;
+import com.tikitaka.backend.document.repository.DocumentRepository;
+import com.tikitaka.backend.space.dto.DocumentSummaryResponse;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -36,6 +44,9 @@ import com.tikitaka.backend.user.repository.UserRepository;
 import io.swagger.v3.oas.annotations.Hidden;
 import lombok.RequiredArgsConstructor;
 
+import com.tikitaka.backend.space.dto.CreateDocumentResponse;
+import org.springframework.web.multipart.MultipartFile;
+
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -43,6 +54,7 @@ import lombok.RequiredArgsConstructor;
 public class SpaceService {
 
     private static final String DEFAULT_TIMEZONE = "Asia/Seoul";
+    private final DocumentRepository documentRepository;
     private static final int SPACE_CODE_LENGTH = 8;
     private static final String SPACE_CODE_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     private static final Set<String> ALLOWED_DAYS = Set.of(
@@ -258,5 +270,105 @@ public class SpaceService {
         } catch (RuntimeException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
         }
+    }
+
+    @Transactional(readOnly = true)
+    public List<DocumentSummaryResponse> getDocuments(UUID userId, UUID spaceId) {
+        if (!userRepository.existsById(userId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다.");
+        }
+
+        if (!spaceRepository.existsById(spaceId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "강의를 찾을 수 없습니다.");
+        }
+
+        boolean isApprovedMember = spaceMemberRepository.existsBySpaceIdAndUserIdAndValidity(
+                spaceId,
+                userId,
+                "APPROVED"
+        );
+
+        if (!isApprovedMember) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "강의 참여자만 강의자료를 조회할 수 있습니다.");
+        }
+
+        return documentRepository.findBySpaceIdOrderByCreatedAtDesc(spaceId)
+                .stream()
+                .map(this::toDocumentSummaryResponse)
+                .toList();
+    }
+
+    private DocumentSummaryResponse toDocumentSummaryResponse(Document document) {
+        return new DocumentSummaryResponse(
+                document.getId(),
+                document.getTitle(),
+                document.getThumbnailUrl(),
+                document.getPdfUrl(),
+                document.getCreatedAt().toLocalDate()
+        );
+    }
+
+    public CreateDocumentResponse createDocument(UUID professorId, UUID spaceId, String title, MultipartFile file) {
+        User professor = userRepository.findById(professorId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+
+        if (professor.getRole() != Role.PROFESSOR) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "교수만 강의자료를 등록할 수 있습니다.");
+        }
+
+        Space space = spaceRepository.findById(spaceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "강의를 찾을 수 없습니다."));
+
+        if (!space.getProfessor().getId().equals(professorId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인이 생성한 강의에만 강의자료를 등록할 수 있습니다.");
+        }
+
+        if (title == null || title.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "강의자료 제목은 필수입니다.");
+        }
+
+        if (file == null || file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PDF 파일은 필수입니다.");
+        }
+
+        String originalFilename = file.getOriginalFilename();
+
+        if (originalFilename == null || !originalFilename.toLowerCase(Locale.ROOT).endsWith(".pdf")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PDF 파일만 업로드할 수 있습니다.");
+        }
+
+        String storedFileName = UUID.randomUUID() + "_" + originalFilename;
+        Path uploadDir = Paths.get(System.getProperty("user.dir"), "uploads", "materials").toAbsolutePath().normalize();
+        Path filePath = uploadDir.resolve(storedFileName).toAbsolutePath().normalize();
+
+        try {
+            Files.createDirectories(uploadDir);
+            Files.copy(file.getInputStream(), filePath);
+        } catch (IOException e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "파일 저장 중 오류가 발생했습니다.");
+        }
+
+        String pdfUrl = "/uploads/materials/" + storedFileName;
+
+        // 일단 기본 썸네일로 저장
+        // PDF 첫 페이지 썸네일 생성은 PDFBox 같은 라이브러리 붙여야 함
+        String thumbnailUrl = "/uploads/materials/default-thumbnail.png";
+
+        Document document = documentRepository.save(Document.builder()
+                .space(space)
+                .title(title)
+                .thumbnailUrl(thumbnailUrl)
+                .pdfUrl(pdfUrl)
+                .pdfPageCount(1)
+                .version(1)
+                .build());
+
+        return new CreateDocumentResponse(
+                document.getId(),
+                space.getId(),
+                document.getTitle(),
+                document.getPdfUrl(),
+                document.getThumbnailUrl()
+        );
     }
 }
