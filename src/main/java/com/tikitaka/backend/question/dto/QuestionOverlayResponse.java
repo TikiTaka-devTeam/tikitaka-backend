@@ -17,10 +17,10 @@ public class QuestionOverlayResponse {
     private String content;
 
     @JsonProperty("x_ratio")
-    private Double xRatio;
+    private Float xRatio;
 
     @JsonProperty("y_ratio")
-    private Double yRatio;
+    private Float yRatio;
 
     @JsonProperty("like_count")
     private Integer likeCount;

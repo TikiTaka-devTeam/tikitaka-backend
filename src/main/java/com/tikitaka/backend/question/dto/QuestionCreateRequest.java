@@ -19,8 +19,8 @@ public class QuestionCreateRequest {
     private Boolean isAnonymous;
 
     @JsonProperty("x_ratio")
-    private Double xRatio;
+    private Float xRatio;
 
     @JsonProperty("y_ratio")
-    private Double yRatio;
+    private Float yRatio;
 }

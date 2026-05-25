@@ -23,10 +23,10 @@ public class QuestionListResponse {
     private Integer likeCount;
 
     @JsonProperty("x_ratio")
-    private Double xRatio;
+    private Float xRatio;
 
     @JsonProperty("y_ratio")
-    private Double yRatio;
+    private Float yRatio;
 
     private String status;
 
