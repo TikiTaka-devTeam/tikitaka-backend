@@ -38,7 +38,7 @@ public class QuestionListResponse {
                 .likeCount(question.getLikeCount())
                 .xRatio(question.getXRatio())
                 .yRatio(question.getYRatio())
-                .status(question.getStatus())
+                .status(question.getStatus().name())
                 .build();
     }
 }

@@ -29,7 +29,7 @@ public class QuestionCreateResponse {
                 .questionId(question.getId())
                 .slideId(question.getSlide().getId())
                 .content(question.getContent())
-                .status(question.getStatus())
+                .status(question.getStatus().name())
                 .isRefined(question.getIsRefined())
                 .build();
     }

@@ -15,17 +15,16 @@ public class QuestionController {
 
     private final QuestionService questionService;
 
-    // QA-001 질문 작성
+    // QA-001 학생이 PDF 강의자료 특정 슬라이드 위에 질문 작성
     @PostMapping("/slides/{slideId}/questions")
     public QuestionCreateResponse createQuestion(
             @PathVariable UUID slideId,
-            @RequestHeader("X-USER-ID") UUID studentId,
             @RequestBody QuestionCreateRequest request
     ) {
-        return questionService.createQuestion(slideId, studentId, request);
+        return questionService.createQuestion(slideId, request);
     }
 
-    // QA-002 특정 슬라이드 질문 목록 조회
+    // QA-002 강의자료 옆 질문 목록 패널 조회
     @GetMapping("/slides/{slideId}/questions")
     public List<QuestionListResponse> getQuestionsBySlide(
             @PathVariable UUID slideId
@@ -33,7 +32,7 @@ public class QuestionController {
         return questionService.getQuestionsBySlide(slideId);
     }
 
-    // QA-003 슬라이드 오버레이용 질문 목록 조회
+    // QA-003 PDF 슬라이드 위 질문 마커 조회
     @GetMapping("/slides/{slideId}/questions/overlay")
     public List<QuestionOverlayResponse> getQuestionOverlayBySlide(
             @PathVariable UUID slideId
@@ -53,9 +52,8 @@ public class QuestionController {
     @PostMapping("/questions/{questionId}/answer")
     public AnswerCreateResponse createAnswer(
             @PathVariable UUID questionId,
-            @RequestHeader("X-USER-ID") UUID professorId,
             @RequestBody AnswerCreateRequest request
     ) {
-        return questionService.createAnswer(questionId, professorId, request);
+        return questionService.createAnswer(questionId, request);
     }
 }

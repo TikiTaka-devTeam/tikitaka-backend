@@ -33,7 +33,7 @@ public class QuestionDetailResponse {
                 .content(question.getContent())
                 .refinedContent(question.getRefinedContent())
                 .likeCount(question.getLikeCount())
-                .status(question.getStatus())
+                .status(question.getStatus().name())
                 .answer(answer == null ? null : AnswerResponse.from(answer))
                 .build();
     }

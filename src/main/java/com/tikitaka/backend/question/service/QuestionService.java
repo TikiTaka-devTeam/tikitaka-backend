@@ -1,8 +1,10 @@
 package com.tikitaka.backend.question.service;
 
+import com.tikitaka.backend.global.config.security.CurrentUserProvider;
 import com.tikitaka.backend.question.answer.Answer;
 import com.tikitaka.backend.question.dto.*;
 import com.tikitaka.backend.question.entity.Question;
+import com.tikitaka.backend.question.enums.QuestionStatus;
 import com.tikitaka.backend.question.repository.AnswerRepository;
 import com.tikitaka.backend.question.repository.QuestionRepository;
 import com.tikitaka.backend.slide.entity.Slide;
@@ -10,7 +12,6 @@ import com.tikitaka.backend.slide.repository.SlideRepository;
 import com.tikitaka.backend.stroke.entity.PrivateStroke;
 import com.tikitaka.backend.stroke.repository.PrivateStrokeRepository;
 import com.tikitaka.backend.user.entity.User;
-import com.tikitaka.backend.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,36 +26,37 @@ public class QuestionService {
 
     private final QuestionRepository questionRepository;
     private final AnswerRepository answerRepository;
-
     private final SlideRepository slideRepository;
     private final PrivateStrokeRepository privateStrokeRepository;
-    private final UserRepository userRepository;
+    private final CurrentUserProvider currentUserProvider;
 
     @Transactional
     public QuestionCreateResponse createQuestion(
             UUID slideId,
-            UUID studentId,
             QuestionCreateRequest request
     ) {
+        User currentUser = currentUserProvider.getCurrentUser();
+
+        if (!isStudent(currentUser)) {
+            throw new IllegalStateException("학생만 질문을 작성할 수 있습니다.");
+        }
+
         Slide slide = slideRepository.findById(slideId)
                 .orElseThrow(() -> new IllegalArgumentException("슬라이드를 찾을 수 없습니다."));
-
-        User student = userRepository.findById(studentId)
-                .orElseThrow(() -> new IllegalArgumentException("학생 사용자를 찾을 수 없습니다."));
 
         PrivateStroke privateStroke = privateStrokeRepository.findById(request.getPrivateStrokeId())
                 .orElseThrow(() -> new IllegalArgumentException("질문 포인트 필기를 찾을 수 없습니다."));
 
         Question question = Question.builder()
                 .slide(slide)
-                .student(student)
+                .student(currentUser)
                 .privateStroke(privateStroke)
                 .content(request.getContent())
                 .isAnonymous(request.getIsAnonymous())
                 .xRatio(request.getXRatio())
                 .yRatio(request.getYRatio())
                 .likeCount(0)
-                .status("PENDING")
+                .status(QuestionStatus.PENDING)
                 .isRefined(false)
                 .build();
 
@@ -90,14 +92,16 @@ public class QuestionService {
     @Transactional
     public AnswerCreateResponse createAnswer(
             UUID questionId,
-            UUID professorId,
             AnswerCreateRequest request
     ) {
+        User currentUser = currentUserProvider.getCurrentUser();
+
+        if (!isProfessor(currentUser)) {
+            throw new IllegalStateException("교수만 답변을 작성할 수 있습니다.");
+        }
+
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new IllegalArgumentException("질문을 찾을 수 없습니다."));
-
-        User professor = userRepository.findById(professorId)
-                .orElseThrow(() -> new IllegalArgumentException("교수 사용자를 찾을 수 없습니다."));
 
         if (answerRepository.existsByQuestionId(questionId)) {
             throw new IllegalStateException("이미 답변이 작성된 질문입니다.");
@@ -105,7 +109,7 @@ public class QuestionService {
 
         Answer answer = Answer.builder()
                 .question(question)
-                .professor(professor)
+                .professor(currentUser)
                 .answererType("PROFESSOR")
                 .content(request.getContent())
                 .aiModel(null)
@@ -113,8 +117,15 @@ public class QuestionService {
 
         Answer savedAnswer = answerRepository.save(answer);
 
-        question.setStatus("ANSWERED");
-
+        question.markAsAnswered();
         return AnswerCreateResponse.from(savedAnswer);
+    }
+
+    private boolean isStudent(User user) {
+        return "STUDENT".equals(String.valueOf(user.getRole()));
+    }
+
+    private boolean isProfessor(User user) {
+        return "PROFESSOR".equals(String.valueOf(user.getRole()));
     }
 }
