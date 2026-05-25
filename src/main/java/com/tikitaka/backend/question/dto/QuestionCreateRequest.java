@@ -1,12 +1,10 @@
 package com.tikitaka.backend.question.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.util.UUID;
 
-@Getter
 @NoArgsConstructor
 public class QuestionCreateRequest {
 
@@ -23,4 +21,28 @@ public class QuestionCreateRequest {
 
     @JsonProperty("y_ratio")
     private Float yRatio;
+
+    @JsonProperty("private_stroke_id")
+    public UUID getPrivateStrokeId() {
+        return privateStrokeId;
+    }
+
+    public String getContent() {
+        return content;
+    }
+
+    @JsonProperty("is_anonymous")
+    public Boolean getIsAnonymous() {
+        return isAnonymous;
+    }
+
+    @JsonProperty("x_ratio")
+    public Float getXRatio() {
+        return xRatio;
+    }
+
+    @JsonProperty("y_ratio")
+    public Float getYRatio() {
+        return yRatio;
+    }
 }
