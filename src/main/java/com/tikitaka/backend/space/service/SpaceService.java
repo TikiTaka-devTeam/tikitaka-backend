@@ -9,6 +9,10 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
+import com.tikitaka.backend.document.entity.Document;
+import com.tikitaka.backend.document.repository.DocumentRepository;
+import com.tikitaka.backend.space.dto.DocumentSummaryResponse;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +47,7 @@ import lombok.RequiredArgsConstructor;
 public class SpaceService {
 
     private static final String DEFAULT_TIMEZONE = "Asia/Seoul";
+    private final DocumentRepository documentRepository;
     private static final int SPACE_CODE_LENGTH = 8;
     private static final String SPACE_CODE_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     private static final Set<String> ALLOWED_DAYS = Set.of(
@@ -258,5 +263,41 @@ public class SpaceService {
         } catch (RuntimeException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
         }
+    }
+
+    @Transactional(readOnly = true)
+    public List<DocumentSummaryResponse> getDocuments(UUID userId, UUID spaceId) {
+        if (!userRepository.existsById(userId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다.");
+        }
+
+        if (!spaceRepository.existsById(spaceId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "강의를 찾을 수 없습니다.");
+        }
+
+        boolean isApprovedMember = spaceMemberRepository.existsBySpaceIdAndUserIdAndValidity(
+                spaceId,
+                userId,
+                "APPROVED"
+        );
+
+        if (!isApprovedMember) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "강의 참여자만 강의자료를 조회할 수 있습니다.");
+        }
+
+        return documentRepository.findBySpaceIdOrderByCreatedAtDesc(spaceId)
+                .stream()
+                .map(this::toDocumentSummaryResponse)
+                .toList();
+    }
+
+    private DocumentSummaryResponse toDocumentSummaryResponse(Document document) {
+        return new DocumentSummaryResponse(
+                document.getId(),
+                document.getTitle(),
+                document.getThumbnailUrl(),
+                document.getPdfUrl(),
+                document.getCreatedAt().toLocalDate()
+        );
     }
 }
