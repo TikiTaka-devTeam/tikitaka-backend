@@ -51,4 +51,17 @@ public interface SpaceMemberRepository extends JpaRepository<SpaceMember, UUID> 
     );
 
     Optional<SpaceMember> findByIdAndSpaceId(UUID id, UUID spaceId);
+
+    @Query("""
+    SELECT COUNT(sm) > 0
+    FROM SpaceMember sm
+    WHERE sm.space.id = :spaceId
+      AND sm.user.id = :userId
+      AND sm.validity = :validity
+    """)
+    boolean existsBySpaceIdAndUserIdAndValidity(
+            @Param("spaceId") UUID spaceId,
+            @Param("userId") UUID userId,
+            @Param("validity") String validity
+    );
 }
