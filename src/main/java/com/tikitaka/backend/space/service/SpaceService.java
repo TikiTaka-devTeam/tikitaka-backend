@@ -17,6 +17,10 @@ import com.tikitaka.backend.document.entity.Document;
 import com.tikitaka.backend.document.repository.DocumentRepository;
 import com.tikitaka.backend.space.dto.DocumentSummaryResponse;
 
+import com.tikitaka.backend.slide.dto.PdfSlideConvertResult;
+import com.tikitaka.backend.slide.entity.Slide;
+import com.tikitaka.backend.slide.repository.SlideRepository;
+import com.tikitaka.backend.slide.service.PdfSlideConvertService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,6 +59,8 @@ public class SpaceService {
 
     private static final String DEFAULT_TIMEZONE = "Asia/Seoul";
     private final DocumentRepository documentRepository;
+    private final SlideRepository slideRepository;
+    private final PdfSlideConvertService pdfSlideConvertService;
     private static final int SPACE_CODE_LENGTH = 8;
     private static final String SPACE_CODE_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     private static final Set<String> ALLOWED_DAYS = Set.of(
@@ -337,8 +343,15 @@ public class SpaceService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PDF 파일만 업로드할 수 있습니다.");
         }
 
-        String storedFileName = UUID.randomUUID() + "_" + originalFilename;
-        Path uploadDir = Paths.get(System.getProperty("user.dir"), "uploads", "materials").toAbsolutePath().normalize();
+        String documentFileKey = UUID.randomUUID().toString();
+        String storedFileName = documentFileKey + "_" + originalFilename;
+
+        Path uploadDir = Paths.get(
+                System.getProperty("user.dir"),
+                "uploads",
+                "materials"
+        ).toAbsolutePath().normalize();
+
         Path filePath = uploadDir.resolve(storedFileName).toAbsolutePath().normalize();
 
         try {
@@ -350,18 +363,32 @@ public class SpaceService {
 
         String pdfUrl = "/uploads/materials/" + storedFileName;
 
-        // 일단 기본 썸네일로 저장
-        // PDF 첫 페이지 썸네일 생성은 PDFBox 같은 라이브러리 붙여야 함
-        String thumbnailUrl = "/uploads/materials/default-thumbnail.png";
+        PdfSlideConvertResult convertResult = pdfSlideConvertService.convertPdfToSlideImages(
+                filePath,
+                documentFileKey
+        );
 
         Document document = documentRepository.save(Document.builder()
                 .space(space)
                 .title(title)
-                .thumbnailUrl(thumbnailUrl)
+                .thumbnailUrl(convertResult.thumbnailUrl())
                 .pdfUrl(pdfUrl)
-                .pdfPageCount(1)
+                .pdfPageCount(convertResult.pageCount())
                 .version(1)
                 .build());
+
+        for (int i = 0; i < convertResult.slideImageUrls().size(); i++) {
+            Slide slide = Slide.builder()
+                    .document(document)
+                    .pageNumber(i + 1)
+                    .version(1)
+                    .imageUrl(convertResult.slideImageUrls().get(i))
+                    .isReplaced(false)
+                    .isDeleted(false)
+                    .build();
+
+            slideRepository.save(slide);
+        }
 
         return new CreateDocumentResponse(
                 document.getId(),
