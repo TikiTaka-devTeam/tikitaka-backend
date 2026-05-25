@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import com.tikitaka.backend.space.dto.DocumentSummaryResponse;
 
 import com.tikitaka.backend.global.config.SwaggerConfig;
 import com.tikitaka.backend.global.jwt.JwtProvider;
@@ -145,5 +146,39 @@ public class MySpaceController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authorization 헤더가 올바르지 않습니다.");
         }
         return authHeader.substring(7);
+    }
+
+    @GetMapping("/{space_id}/documents")
+    @Operation(
+            summary = "강의자료 목록 조회",
+            description = "강의 참여자가 특정 강의의 강의자료 목록을 날짜순으로 조회합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "강의자료 목록 조회 성공",
+                    content = @Content(
+                            array = @ArraySchema(schema = @Schema(implementation = DocumentSummaryResponse.class))
+                    )
+            ),
+            @ApiResponse(responseCode = "401", description = "유효하지 않은 액세스 토큰"),
+            @ApiResponse(responseCode = "403", description = "강의 참여자가 아닌 경우"),
+            @ApiResponse(responseCode = "404", description = "사용자 또는 강의를 찾을 수 없음")
+    })
+    public ResponseEntity<List<DocumentSummaryResponse>> getDocuments(
+            @Parameter(hidden = true)
+            @RequestHeader("Authorization") String authHeader,
+
+            @Parameter(description = "강의 ID", example = "123e4567-e89b-12d3-a456-426614174000")
+            @PathVariable("space_id") UUID spaceId
+    ) {
+        String accessToken = extractBearerToken(authHeader);
+        jwtProvider.isTokenValid(accessToken);
+
+        UUID userId = UUID.fromString(jwtProvider.extractUserId(accessToken));
+
+        List<DocumentSummaryResponse> response = spaceService.getDocuments(userId, spaceId);
+
+        return ResponseEntity.ok(response);
     }
 }
