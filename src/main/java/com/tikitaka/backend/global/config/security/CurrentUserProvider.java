@@ -7,6 +7,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
+import java.util.UUID;
+
 @Component
 @RequiredArgsConstructor
 public class CurrentUserProvider {
@@ -20,9 +22,9 @@ public class CurrentUserProvider {
             throw new IllegalStateException("로그인이 필요합니다.");
         }
 
-        String email = authentication.getName();
+        String userId = authentication.getName();
 
-        return userRepository.findByEmail(email)
+        return userRepository.findById(UUID.fromString(userId))
                 .orElseThrow(() -> new IllegalStateException("현재 로그인한 사용자를 찾을 수 없습니다."));
     }
 }
