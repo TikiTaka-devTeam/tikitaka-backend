@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>Stroke WebSocket Test</title>
+  <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: monospace; background: #1e1e1e; color: #d4d4d4; margin: 0; padding: 20px; }
+    h2 { color: #569cd6; margin-top: 0; }
+    .section { background: #252526; border: 1px solid #3c3c3c; border-radius: 6px; padding: 16px; margin-bottom: 16px; }
+    .section h3 { margin: 0 0 12px; color: #9cdcfe; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
+    label { display: block; font-size: 12px; color: #858585; margin-bottom: 4px; }
+    input, textarea { width: 100%; background: #1e1e1e; border: 1px solid #3c3c3c; color: #d4d4d4; padding: 6px 8px; border-radius: 4px; font-family: monospace; font-size: 13px; }
+    textarea { resize: vertical; min-height: 80px; }
+    .row { display: flex; gap: 12px; }
+    .row > div { flex: 1; }
+    button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-family: monospace; margin-right: 8px; }
+    #btnConnect    { background: #0e639c; color: #fff; }
+    #btnDisconnect { background: #6c3333; color: #fff; }
+    #btnSend       { background: #1e7b34; color: #fff; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    #status { font-size: 12px; padding: 4px 10px; border-radius: 10px; display: inline-block; }
+    .status-disconnected { background: #3c1f1f; color: #f48771; }
+    .status-connected    { background: #1e3a1e; color: #89d185; }
+    #log { background: #1e1e1e; border: 1px solid #3c3c3c; border-radius: 4px; padding: 12px; height: 320px; overflow-y: auto; font-size: 12px; }
+    .log-in   { color: #89d185; }
+    .log-out  { color: #569cd6; }
+    .log-err  { color: #f48771; }
+    .log-info { color: #858585; }
+    .ts { color: #5a5a5a; margin-right: 6px; }
+  </style>
+</head>
+<body>
+
+<h2>Stroke WebSocket Test</h2>
+
+<!-- 연결 설정 -->
+<div class="section">
+  <h3>연결 설정</h3>
+  <div class="row">
+    <div>
+      <label>서버 URL</label>
+      <input id="serverUrl" value="http://localhost:8080/ws" />
+    </div>
+    <div>
+      <label>JWT Token (Bearer 없이)</label>
+      <input id="jwtToken" placeholder="eyJhbGci..." />
+    </div>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <div>
+      <label>Space ID (UUID)</label>
+      <input id="spaceId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+    </div>
+    <div>
+      <label>Slide ID (UUID)</label>
+      <input id="slideId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+    </div>
+  </div>
+  <div style="margin-top:12px">
+    <button id="btnConnect">연결</button>
+    <button id="btnDisconnect" disabled>연결 해제</button>
+    <span id="status" class="status-disconnected">● 연결 안 됨</span>
+  </div>
+</div>
+
+<!-- 구독 -->
+<div class="section">
+  <h3>구독 토픽 (연결 후 자동 구독)</h3>
+  <label>구독 경로 (자동 생성)</label>
+  <input id="subscribeTopic" readonly placeholder="/topic/spaces/{spaceId}/slides/{slideId}/shared-strokes" style="color:#858585" />
+</div>
+
+<!-- 메시지 전송 -->
+<div class="section">
+  <h3>필기 전송</h3>
+  <div class="row">
+    <div>
+      <label>Tool</label>
+      <select id="tool" style="width:100%;background:#1e1e1e;border:1px solid #3c3c3c;color:#d4d4d4;padding:6px 8px;border-radius:4px;font-family:monospace;font-size:13px">
+        <option>PEN</option>
+        <option>HIGHLIGHTER</option>
+        <option>ERASER</option>
+        <option>KEYBOARD</option>
+      </select>
+    </div>
+    <div>
+      <label>Color</label>
+      <input id="color" value="#FF0000" />
+    </div>
+    <div>
+      <label>Thickness</label>
+      <input id="thickness" type="number" value="3" step="0.5" />
+    </div>
+    <div>
+      <label>Stroke Order</label>
+      <input id="strokeOrder" type="number" value="1" />
+    </div>
+  </div>
+  <div style="margin-top:10px">
+    <label>Points (JSON 배열)</label>
+    <textarea id="points">[{"x":10,"y":20},{"x":30,"y":40},{"x":50,"y":60}]</textarea>
+  </div>
+  <div style="margin-top:10px">
+    <label>Content (KEYBOARD tool 시 사용)</label>
+    <input id="content" placeholder="텍스트 내용 (선택)" />
+  </div>
+  <div style="margin-top:12px">
+    <button id="btnSend" disabled>필기 전송 (/app/spaces/.../shared-strokes)</button>
+  </div>
+</div>
+
+<!-- 로그 -->
+<div class="section">
+  <h3>메시지 로그</h3>
+  <div id="log"></div>
+</div>
+
+<script>
+  let stompClient = null;
+  let subscription = null;
+
+  const $ = id => document.getElementById(id);
+
+  function ts() {
+    return new Date().toLocaleTimeString('ko-KR', { hour12: false });
+  }
+
+  function log(msg, cls = 'log-info') {
+    const el = $('log');
+    el.innerHTML += `<div class="${cls}"><span class="ts">[${ts()}]</span>${escHtml(msg)}</div>`;
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function setConnected(ok) {
+    $('btnConnect').disabled = ok;
+    $('btnDisconnect').disabled = !ok;
+    $('btnSend').disabled = !ok;
+    const s = $('status');
+    if (ok) {
+      s.textContent = '● 연결됨';
+      s.className = 'status-connected';
+    } else {
+      s.textContent = '● 연결 안 됨';
+      s.className = 'status-disconnected';
+    }
+  }
+
+  function getDestination() {
+    const spaceId = $('spaceId').value.trim();
+    const slideId = $('slideId').value.trim();
+    return { send: `/app/spaces/${spaceId}/slides/${slideId}/shared-strokes`,
+             topic: `/topic/spaces/${spaceId}/slides/${slideId}/shared-strokes` };
+  }
+
+  $('spaceId').addEventListener('input', updateTopicDisplay);
+  $('slideId').addEventListener('input', updateTopicDisplay);
+
+  function updateTopicDisplay() {
+    const { topic } = getDestination();
+    $('subscribeTopic').value = topic;
+  }
+
+  $('btnConnect').addEventListener('click', () => {
+    const url = $('serverUrl').value.trim();
+    const token = $('jwtToken').value.trim();
+
+    const sock = new SockJS(url);
+    stompClient = Stomp.over(sock);
+    stompClient.debug = msg => log('[STOMP DEBUG] ' + msg, 'log-info');
+
+    const headers = token ? { Authorization: 'Bearer ' + token } : {};
+
+    log(`연결 시도 → ${url}`, 'log-info');
+
+    stompClient.connect(headers, frame => {
+      log('연결 성공: ' + frame, 'log-in');
+      setConnected(true);
+
+      const { topic } = getDestination();
+      $('subscribeTopic').value = topic;
+      subscription = stompClient.subscribe(topic, msg => {
+        try {
+          const body = JSON.parse(msg.body);
+          log('← 수신: ' + JSON.stringify(body, null, 2), 'log-in');
+        } catch(e) {
+          log('← 수신 (raw): ' + msg.body, 'log-in');
+        }
+      });
+      log(`구독 시작 → ${topic}`, 'log-info');
+
+    }, err => {
+      log('연결 실패: ' + err, 'log-err');
+      setConnected(false);
+    });
+  });
+
+  $('btnDisconnect').addEventListener('click', () => {
+    if (subscription) subscription.unsubscribe();
+    if (stompClient) stompClient.disconnect(() => log('연결 해제됨', 'log-info'));
+    setConnected(false);
+  });
+
+  $('btnSend').addEventListener('click', () => {
+    const spaceId = $('spaceId').value.trim();
+    const slideId = $('slideId').value.trim();
+    const token   = $('jwtToken').value.trim();
+
+    if (!spaceId || !slideId) {
+      log('Space ID, Slide ID를 입력하세요.', 'log-err');
+      return;
+    }
+
+    let points;
+    try {
+      points = JSON.parse($('points').value);
+    } catch(e) {
+      log('Points JSON 파싱 오류: ' + e.message, 'log-err');
+      return;
+    }
+
+    const payload = {
+      type: 'SHARED_STROKE',
+      slideId: slideId,
+      stroke: {
+        tool: $('tool').value,
+        points: points,
+        color: $('color').value,
+        thickness: parseFloat($('thickness').value),
+        content: $('content').value || null,
+        strokeOrder: parseInt($('strokeOrder').value)
+      }
+    };
+
+    const { send } = getDestination();
+    const headers = token ? { Authorization: 'Bearer ' + token } : {};
+
+    stompClient.send(send, headers, JSON.stringify(payload));
+    log('→ 전송: ' + JSON.stringify(payload, null, 2), 'log-out');
+  });
+</script>
+</body>
+</html>

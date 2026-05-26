@@ -19,50 +19,51 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 public class SharedStroke {
- 
+
     @Id
     @UuidGenerator
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
- 
-    // 교수 필기 → 모든 학생에게 브로드캐스트되는 레이어
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "layer_id", nullable = false)
     private SharedLayer layer;
- 
-    // PEN | HIGHLIGHTER | ERASER | Q_LIST | KEYBOARD | ETC
-    // 교수는 Q_POINT 사용 불가 (질문 생성 기능 없음)
+
     @Column(name = "tool", length = 30, nullable = false)
     private String tool;
- 
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "points", columnDefinition = "jsonb", nullable = false)
     private String points;
- 
+
     @Column(name = "content", columnDefinition = "TEXT")
     private String content;
- 
+
     @Column(name = "color", length = 7, nullable = false)
     @Builder.Default
     private String color = "#000000";
- 
+
     @Column(name = "thickness", nullable = false)
     @Builder.Default
     private Float thickness = 2.0f;
- 
+
     @Column(name = "is_deleted", nullable = false)
     @Builder.Default
     private Boolean isDeleted = false;
- 
+
     @Column(name = "stroke_order", nullable = false)
     @Builder.Default
     private Integer strokeOrder = 0;
- 
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
+    }
+
+    public void markDeleted() {
+        this.isDeleted = true;
     }
 }

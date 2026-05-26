@@ -18,9 +18,6 @@ import com.tikitaka.backend.space.dto.CreateDocumentResponse;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.multipart.MultipartFile;
-import io.swagger.v3.oas.annotations.parameters.RequestBody;
-import io.swagger.v3.oas.annotations.media.Schema;
-
 import com.tikitaka.backend.global.config.SwaggerConfig;
 import com.tikitaka.backend.global.jwt.JwtProvider;
 import com.tikitaka.backend.space.dto.SpaceMemberStatusResponse;
