@@ -12,6 +12,7 @@ import com.tikitaka.backend.slide.repository.SlideRepository;
 import com.tikitaka.backend.stroke.dto.*;
 import com.tikitaka.backend.stroke.entity.PrivateStroke;
 import com.tikitaka.backend.stroke.entity.SharedStroke;
+import com.tikitaka.backend.stroke.entity.StrokeTool;
 import com.tikitaka.backend.stroke.repository.PrivateStrokeRepository;
 import com.tikitaka.backend.stroke.repository.SharedStrokeRepository;
 import com.tikitaka.backend.user.entity.Role;
@@ -51,7 +52,7 @@ public class StrokeService {
                 .map(req -> privateStrokeRepository.save(
                         PrivateStroke.builder()
                                 .layer(layer)
-                                .tool(req.getTool())
+                                .tool(req.getTool().name())
                                 .points(toJson(req.getPoints()))
                                 .content(req.getContent())
                                 .color(req.getColor() != null ? req.getColor() : "#000000")
@@ -107,17 +108,22 @@ public class StrokeService {
                 ));
 
         List<SharedStroke> saved = request.getStrokes().stream()
-                .map(req -> sharedStrokeRepository.save(
+                .map(req -> {
+                    if (req.getTool() == StrokeTool.Q_POINT) {
+                        throw new CustomException(ErrorCode.Q_POINT_NOT_ALLOWED);
+                    }
+                    return sharedStrokeRepository.save(
                         SharedStroke.builder()
                                 .layer(layer)
-                                .tool(req.getTool())
+                                .tool(req.getTool().name())
                                 .points(toJson(req.getPoints()))
                                 .content(req.getContent())
                                 .color(req.getColor() != null ? req.getColor() : "#000000")
                                 .thickness(req.getThickness() != null ? req.getThickness() : 2.0f)
                                 .strokeOrder(req.getStrokeOrder() != null ? req.getStrokeOrder() : 0)
                                 .build()
-                )).toList();
+                    );
+                }).toList();
 
         return new SaveStrokesResponse(slideId, saved.size(), saved.stream().map(SharedStroke::getId).toList());
     }
@@ -125,9 +131,9 @@ public class StrokeService {
     @Transactional(readOnly = true)
     public GetSharedStrokesResponse getSharedStrokes(UUID slideId, UUID userId) {
         Slide slide = findSlide(slideId);
-        User user = findUser(userId);
+        User professor = slide.getDocument().getSpace().getProfessor();
 
-        List<StrokeResponse> strokes = sharedLayerRepository.findBySlideAndUser(slide, user)
+        List<StrokeResponse> strokes = sharedLayerRepository.findBySlideAndUser(slide, professor)
                 .map(layer -> sharedStrokeRepository.findByLayerAndIsDeletedFalseOrderByStrokeOrderAsc(layer)
                         .orElse(Collections.emptyList()))
                 .orElse(Collections.emptyList())

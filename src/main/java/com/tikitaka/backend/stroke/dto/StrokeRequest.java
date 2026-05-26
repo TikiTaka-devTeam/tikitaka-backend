@@ -1,6 +1,6 @@
 package com.tikitaka.backend.stroke.dto;
 
-import jakarta.validation.constraints.NotBlank;
+import com.tikitaka.backend.stroke.entity.StrokeTool;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -10,8 +10,8 @@ import java.util.List;
 @NoArgsConstructor
 public class StrokeRequest {
 
-    @NotBlank(message = "tool은 필수입니다")
-    private String tool;
+    @NotNull(message = "tool은 필수입니다")
+    private StrokeTool tool;
 
     @NotNull(message = "points는 필수입니다")
     private List<StrokePoint> points;

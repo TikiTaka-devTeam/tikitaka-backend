@@ -2,6 +2,7 @@ package com.tikitaka.backend.global.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -17,6 +18,14 @@ public class GlobalExceptionHandler {
         return ResponseEntity
             .status(code.getStatus())
             .body(new ErrorResponse(code.name(), code.getMessage()));
+    }
+
+    // JSON 역직렬화 실패 처리 (유효하지 않은 enum 값 포함)
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleHttpMessageNotReadable(HttpMessageNotReadableException e) {
+        return ResponseEntity
+            .status(HttpStatus.BAD_REQUEST)
+            .body(new ErrorResponse("INVALID_INPUT", "유효하지 않은 입력값입니다"));
     }
 
     // @Valid 실패 처리
