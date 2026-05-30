@@ -27,20 +27,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
+        // CORS preflight 요청은 JWT 검사하지 않고 바로 통과
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         String authHeader = request.getHeader("Authorization");
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
+
             try {
                 if (jwtProvider.isTokenValid(token)) {
                     String userId = jwtProvider.extractUserId(token);
-                    UserDetails userDetails = customUserDetailsService.loadUserByUsername(userId);
+
+                    UserDetails userDetails =
+                            customUserDetailsService.loadUserByUsername(userId);
+
                     UsernamePasswordAuthenticationToken authentication =
                             new UsernamePasswordAuthenticationToken(
                                     userDetails.getUsername(),
                                     null,
                                     userDetails.getAuthorities()
                             );
+
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                 }
             } catch (CustomException e) {
