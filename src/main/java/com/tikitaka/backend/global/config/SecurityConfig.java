@@ -59,9 +59,7 @@ public class SecurityConfig {
 
         config.setAllowedOrigins(List.of(
                 "http://localhost:5173",
-                "http://127.0.0.1:5173"
-                // 프론트 배포 주소 있으면 여기에 추가
-                // "https://너희프론트주소.cloudfront.net"
+                "https://d27bvnjwx94rj6.cloudfront.net"
         ));
 
         config.setAllowedMethods(List.of(
