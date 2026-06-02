@@ -46,6 +46,7 @@ public class AuthService {
             .major(request.getMajor())
             .phoneNumber(request.getPhoneNumber())
             .memberIdNumber(request.getMemberIdNumber())
+            .profileUrl(request.getProfileUrl()) // 프로필 사진 URL 저장
             .build();
         userRepository.save(user);
 
