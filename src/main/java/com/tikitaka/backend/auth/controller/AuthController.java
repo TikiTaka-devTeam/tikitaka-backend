@@ -95,10 +95,22 @@ public class AuthController {
         return ResponseEntity.ok(authService.checkEmailDuplicate(email));
     }
 
-    // 프로필 이미지 업로드
+    @PostMapping( value = "/create-profile-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(
+        summary = "회원가입 시 프로필 이미지 업로드",
+        description = "회원가입 전에 프로필 이미지를 업로드하고 URL을 반환"
+    )
+    public ResponseEntity<ProfileImageResponse> createProfileImage(
+        @RequestParam("file") MultipartFile file
+    ) {
+        String profileUrl = authService.createProfileImage(file);
+        return ResponseEntity.ok(new ProfileImageResponse(profileUrl));
+    }
+    
+    // 프로필 이미지 수정
     @PostMapping(value = "/profile-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(
-        summary = "프로필 이미지 업로드",
+        summary = "프로필 이미지 수정",
         description = "FormData의 file 필드로 프로필 이미지를 업로드하고 사용자 profile_url을 갱신"
     )
     public ResponseEntity<ProfileImageResponse> uploadProfileImage(
