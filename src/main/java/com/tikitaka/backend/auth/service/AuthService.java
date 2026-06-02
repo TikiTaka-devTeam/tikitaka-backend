@@ -155,4 +155,8 @@ public class AuthService {
             user.getRole().name()
         );
     }
+
+    public boolean checkEmailDuplicate(String email) {
+        return userRepository.existsByEmail(email);
+    }
 }
