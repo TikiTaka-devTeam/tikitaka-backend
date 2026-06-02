@@ -1,5 +1,6 @@
 package com.tikitaka.backend.space.repository;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -10,4 +11,5 @@ import io.swagger.v3.oas.annotations.Hidden;
 
 @Hidden
 public interface ScheduleRepository extends JpaRepository<Schedule, UUID> {
+    List<Schedule> findBySpaceIdOrderByDayAscStartTimeAsc(UUID spaceId);
 }

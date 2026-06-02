@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -21,6 +22,7 @@ import com.tikitaka.backend.space.dto.CreateSpaceResponse;
 import com.tikitaka.backend.space.dto.JoinSpaceRequest;
 import com.tikitaka.backend.space.dto.JoinSpaceResponse;
 import com.tikitaka.backend.space.dto.SpaceCodeResponse;
+import com.tikitaka.backend.space.dto.SpaceLookupResponse;
 import com.tikitaka.backend.space.dto.SpaceSummaryResponse;
 import com.tikitaka.backend.space.service.SpaceService;
 
@@ -71,6 +73,38 @@ public class MainSpaceController {
 
         UUID userId = UUID.fromString(jwtProvider.extractUserId(accessToken));
         List<SpaceSummaryResponse> response = spaceService.getMySpaces(userId);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/lookup")
+    @Operation(
+        summary = "초대 코드로 강의 정보 조회",
+        description = "학생 사용자가 초대 코드를 입력해 존재하는 강의인지 확인하고 기본 정보를 조회합니다."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "강의 조회 성공",
+            content = @Content(schema = @Schema(implementation = SpaceLookupResponse.class))
+        ),
+        @ApiResponse(responseCode = "400", description = "잘못된 초대 코드 형식"),
+        @ApiResponse(responseCode = "401", description = "유효하지 않은 액세스 토큰"),
+        @ApiResponse(responseCode = "403", description = "학생 권한이 아닌 사용자의 요청"),
+        @ApiResponse(responseCode = "404", description = "해당 초대 코드의 강의를 찾을 수 없음"),
+        @ApiResponse(responseCode = "409", description = "이미 참여 중이거나 참여 요청 대기 중인 강의")
+    })
+    public ResponseEntity<SpaceLookupResponse> lookupSpace(
+        @Parameter(hidden = true)
+        @RequestHeader("Authorization") String authHeader,
+        @Parameter(description = "강의 초대 코드", example = "A1B2C3D4")
+        @RequestParam("space_code") String spaceCode
+    ) {
+        String accessToken = extractBearerToken(authHeader);
+        jwtProvider.isTokenValid(accessToken);
+
+        UUID studentId = UUID.fromString(jwtProvider.extractUserId(accessToken));
+        SpaceLookupResponse response = spaceService.lookupSpaceByCode(studentId, spaceCode);
 
         return ResponseEntity.ok(response);
     }

@@ -32,6 +32,8 @@ import com.tikitaka.backend.space.dto.CreateSpaceResponse;
 import com.tikitaka.backend.space.dto.JoinSpaceRequest;
 import com.tikitaka.backend.space.dto.JoinSpaceResponse;
 import com.tikitaka.backend.space.dto.SpaceCodeResponse;
+import com.tikitaka.backend.space.dto.SpaceLookupResponse;
+import com.tikitaka.backend.space.dto.SpaceLookupScheduleResponse;
 import com.tikitaka.backend.space.dto.SpaceMemberStatusResponse;
 import com.tikitaka.backend.space.dto.SpaceMemberSummaryResponse;
 import com.tikitaka.backend.space.dto.SpaceSummaryResponse;
@@ -146,7 +148,9 @@ public class SpaceService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "학생만 강의 참여를 요청할 수 있습니다.");
         }
 
-        Space space = spaceRepository.findBySpaceCode(request.spaceCode())
+        String normalizedCode = normalizeSpaceCode(request.spaceCode());
+
+        Space space = spaceRepository.findBySpaceCode(normalizedCode)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "초대 코드에 해당하는 강의를 찾을 수 없습니다."));
 
         if (spaceMemberRepository.findBySpaceIdAndUserId(space.getId(), student.getId()).isPresent()) {
@@ -164,6 +168,53 @@ public class SpaceService {
             space.getId(),
             space.getName(),
             spaceMember.getValidity()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public SpaceLookupResponse lookupSpaceByCode(UUID studentId, String spaceCode) {
+        User student = userRepository.findById(studentId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+
+        if (student.getRole() != Role.STUDENT) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "학생만 강의 조회를 요청할 수 있습니다.");
+        }
+
+        String normalizedCode = normalizeSpaceCode(spaceCode);
+
+        Space space = spaceRepository.findBySpaceCode(normalizedCode)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "해당 초대 코드의 강의를 찾을 수 없습니다."));
+
+        String membershipStatus = spaceMemberRepository.findBySpaceIdAndUserId(space.getId(), student.getId())
+            .map(SpaceMember::getValidity)
+            .orElse(null);
+
+        if (membershipStatus != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 참여 중이거나 참여 요청 대기 중인 강의입니다.");
+        }
+
+        String nickname = spaceMemberRepository.findBySpaceIdAndUserId(space.getId(), space.getProfessor().getId())
+            .map(SpaceMember::getNickname)
+            .orElse(null);
+
+        List<SpaceLookupScheduleResponse> schedules = scheduleRepository
+            .findBySpaceIdOrderByDayAscStartTimeAsc(space.getId())
+            .stream()
+            .map(schedule -> new SpaceLookupScheduleResponse(
+                schedule.getDay(),
+                schedule.getStartTime().toString(),
+                schedule.getEndTime().toString()
+            ))
+            .toList();
+
+        return new SpaceLookupResponse(
+            space.getId(),
+            space.getSpaceCode(),
+            space.getName(),
+            nickname,
+            space.getSemester(),
+            space.getProfessor().getName(),
+            schedules
         );
     }
 
@@ -268,6 +319,19 @@ public class SpaceService {
             builder.append(SPACE_CODE_CHARACTERS.charAt(index));
         }
         return builder.toString();
+    }
+
+    private String normalizeSpaceCode(String value) {
+        if (value == null || value.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "강의 초대 코드는 필수입니다.");
+        }
+
+        String normalizedValue = value.trim().toUpperCase(Locale.ROOT);
+        if (normalizedValue.length() != SPACE_CODE_LENGTH) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "강의 초대 코드 형식이 올바르지 않습니다.");
+        }
+
+        return normalizedValue;
     }
 
     private LocalTime parseTime(String value, String message) {
