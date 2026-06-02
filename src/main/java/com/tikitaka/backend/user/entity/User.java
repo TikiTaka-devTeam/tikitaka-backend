@@ -80,4 +80,8 @@ public class User {
         this.memberIdNumber = memberIdNumber;
         this.profileUrl = profileUrl;
     }
+
+    public void updateProfileUrl(String profileUrl) {
+        this.profileUrl = profileUrl;
+    }
 }

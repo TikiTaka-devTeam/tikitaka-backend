@@ -1,6 +1,7 @@
 package com.tikitaka.backend.auth.controller;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -9,15 +10,21 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.tikitaka.backend.auth.dto.AuthResponse;
 import com.tikitaka.backend.auth.dto.LoginRequest;
+import com.tikitaka.backend.auth.dto.ProfileImageResponse;
 import com.tikitaka.backend.auth.dto.SignUpRequest;
 import com.tikitaka.backend.auth.service.AuthService;
+import com.tikitaka.backend.global.jwt.JwtProvider;
 
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -25,6 +32,7 @@ import lombok.RequiredArgsConstructor;
 public class AuthController {
 
     private final AuthService authService;
+    private final JwtProvider jwtProvider;
 
     // 이메일/비밀번호 기반 회원가입
     @PostMapping("/signup")
@@ -85,5 +93,32 @@ public class AuthController {
         @RequestParam String email
     ) {
         return ResponseEntity.ok(authService.checkEmailDuplicate(email));
+    }
+
+    // 프로필 이미지 업로드
+    @PostMapping(value = "/profile-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(
+        summary = "프로필 이미지 업로드",
+        description = "FormData의 file 필드로 프로필 이미지를 업로드하고 사용자 profile_url을 갱신"
+    )
+    public ResponseEntity<ProfileImageResponse> uploadProfileImage(
+        @RequestHeader("Authorization") String authHeader,
+        @RequestParam("file") MultipartFile file
+    ) {
+        String accessToken = extractBearerToken(authHeader);
+        jwtProvider.isTokenValid(accessToken);
+
+        UUID userId = UUID.fromString(jwtProvider.extractUserId(accessToken));
+        String profileUrl = authService.uploadProfileImage(userId, file);
+
+        return ResponseEntity.ok(new ProfileImageResponse(profileUrl));
+    }
+
+    private String extractBearerToken(String authHeader) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authorization 헤더가 올바르지 않습니다.");
+        }
+
+        return authHeader.substring(7);
     }
 }

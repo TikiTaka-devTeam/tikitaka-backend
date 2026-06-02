@@ -1,10 +1,19 @@
 package com.tikitaka.backend.auth.service;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import lombok.RequiredArgsConstructor;
 import com.tikitaka.backend.auth.dto.AuthResponse;
@@ -23,6 +32,14 @@ import com.tikitaka.backend.user.repository.UserRepository;
 @RequiredArgsConstructor
 @Transactional
 public class AuthService {
+
+    private static final Set<String> ALLOWED_IMAGE_EXTENSIONS = Set.of(
+        "jpg",
+        "jpeg",
+        "png",
+        "gif",
+        "webp"
+    );
 
     private final UserRepository userRepository;
     private final TokenRepository tokenRepository;
@@ -158,5 +175,65 @@ public class AuthService {
 
     public boolean checkEmailDuplicate(String email) {
         return userRepository.existsByEmail(email);
+    }
+
+    public String uploadProfileImage(UUID userId, MultipartFile file) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        if (file == null || file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "프로필 이미지는 필수입니다.");
+        }
+
+        String contentType = file.getContentType();
+
+        if (contentType == null || !contentType.toLowerCase(Locale.ROOT).startsWith("image/")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "이미지 파일만 업로드할 수 있습니다.");
+        }
+
+        String originalFilename = file.getOriginalFilename();
+        String extension = extractAllowedImageExtension(originalFilename);
+        String storedFileName = UUID.randomUUID() + "." + extension;
+
+        Path uploadDir = Paths.get(
+            System.getProperty("user.dir"),
+            "uploads",
+            "profiles"
+        ).toAbsolutePath().normalize();
+
+        Path filePath = uploadDir.resolve(storedFileName).toAbsolutePath().normalize();
+
+        try {
+            Files.createDirectories(uploadDir);
+            Files.copy(file.getInputStream(), filePath);
+        } catch (IOException e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "프로필 이미지 저장 중 오류가 발생했습니다.");
+        }
+
+        String profileUrl = "/uploads/profiles/" + storedFileName;
+        user.updateProfileUrl(profileUrl);
+
+        return profileUrl;
+    }
+
+    private String extractAllowedImageExtension(String originalFilename) {
+        if (originalFilename == null || originalFilename.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "파일 이름이 올바르지 않습니다.");
+        }
+
+        String filename = Paths.get(originalFilename).getFileName().toString();
+        int dotIndex = filename.lastIndexOf('.');
+
+        if (dotIndex < 0 || dotIndex == filename.length() - 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "이미지 파일 확장자가 필요합니다.");
+        }
+
+        String extension = filename.substring(dotIndex + 1).toLowerCase(Locale.ROOT);
+
+        if (!ALLOWED_IMAGE_EXTENSIONS.contains(extension)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "지원하지 않는 이미지 형식입니다.");
+        }
+
+        return extension;
     }
 }
