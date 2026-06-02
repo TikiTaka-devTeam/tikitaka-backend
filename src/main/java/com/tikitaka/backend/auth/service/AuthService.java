@@ -46,6 +46,7 @@ public class AuthService {
             .major(request.getMajor())
             .phoneNumber(request.getPhoneNumber())
             .memberIdNumber(request.getMemberIdNumber())
+            .profileUrl(request.getProfileUrl())
             .build();
         userRepository.save(user);
 

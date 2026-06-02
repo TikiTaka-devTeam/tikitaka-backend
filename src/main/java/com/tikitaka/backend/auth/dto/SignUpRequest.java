@@ -35,4 +35,5 @@ public class SignUpRequest {
 
     private String phoneNumber; // 선택
     private String memberIdNumber; // 선택
+    private String profileUrl; // 선택
 }
