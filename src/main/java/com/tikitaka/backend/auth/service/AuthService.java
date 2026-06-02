@@ -177,6 +177,40 @@ public class AuthService {
         return userRepository.existsByEmail(email);
     }
 
+    // 참고로 S3 방식으로 나중에 바꿔야 됨.
+    public String createProfileImage(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "프로필 이미지는 필수입니다.");
+        }
+
+        String contentType = file.getContentType();
+
+        if (contentType == null || !contentType.toLowerCase(Locale.ROOT).startsWith("image/")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "이미지 파일만 업로드할 수 있습니다.");
+        }
+
+        String originalFilename = file.getOriginalFilename();
+        String extension = extractAllowedImageExtension(originalFilename);
+        String storedFileName = UUID.randomUUID() + "." + extension;
+
+        Path uploadDir = Paths.get(
+            System.getProperty("user.dir"),
+            "uploads",
+            "profiles"
+        ).toAbsolutePath().normalize();
+
+        Path filePath = uploadDir.resolve(storedFileName).toAbsolutePath().normalize();
+
+        try {
+            Files.createDirectories(uploadDir);
+            Files.copy(file.getInputStream(), filePath);
+        } catch (IOException e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "프로필 이미지 저장 중 오류가 발생했습니다.");
+        }
+
+        return "/uploads/profiles/" + storedFileName;
+    }
+
     public String uploadProfileImage(UUID userId, MultipartFile file) {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
