@@ -16,6 +16,7 @@ public class SharedStrokeMessage {
     private String type;
     private UUID strokeId;
     private UUID slideId;
+    private Integer strokeSeq;
     private StrokeData stroke;
 
     @Getter
