@@ -40,7 +40,7 @@ public record UserProfileResponse(
     @JsonProperty("profile_url")
     String profileUrl
 ) {
-    public static UserProfileResponse from(User user) {
+    public static UserProfileResponse from(User user, String profileUrl) {
         return new UserProfileResponse(
             user.getId(),
             user.getEmail(),
@@ -50,7 +50,7 @@ public record UserProfileResponse(
             user.getUniv(),
             user.getMajor(),
             user.getMemberIdNumber(),
-            user.getProfileUrl()
+            profileUrl
         );
     }
 }

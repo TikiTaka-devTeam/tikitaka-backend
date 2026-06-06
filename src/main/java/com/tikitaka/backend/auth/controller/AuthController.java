@@ -1,7 +1,6 @@
 package com.tikitaka.backend.auth.controller;
 
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -10,12 +9,14 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.tikitaka.backend.auth.dto.AuthResponse;
 import com.tikitaka.backend.auth.dto.LoginRequest;
+import com.tikitaka.backend.auth.dto.ProfileImagePresignedUrlRequest;
+import com.tikitaka.backend.auth.dto.ProfileImagePresignedUrlResponse;
 import com.tikitaka.backend.auth.dto.ProfileImageResponse;
+import com.tikitaka.backend.auth.dto.ProfileImageUpdateRequest;
 import com.tikitaka.backend.auth.dto.SignUpRequest;
 import com.tikitaka.backend.auth.service.AuthService;
 import com.tikitaka.backend.global.jwt.JwtProvider;
@@ -95,33 +96,47 @@ public class AuthController {
         return ResponseEntity.ok(authService.checkEmailDuplicate(email));
     }
 
-    @PostMapping( value = "/create-profile-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping("/create-profile-image")
     @Operation(
-        summary = "회원가입 시 프로필 이미지 업로드",
-        description = "회원가입 전에 프로필 이미지를 업로드하고 URL을 반환"
+        summary = "회원가입 시 프로필 이미지 Presigned URL 발급",
+        description = "회원가입 전에 S3 직접 업로드용 Presigned URL, object key, CloudFront URL을 반환"
     )
-    public ResponseEntity<ProfileImageResponse> createProfileImage(
-        @RequestParam("file") MultipartFile file
+    public ResponseEntity<ProfileImagePresignedUrlResponse> createProfileImage(
+        @RequestBody @Valid ProfileImagePresignedUrlRequest request
     ) {
-        String profileUrl = authService.createProfileImage(file);
-        return ResponseEntity.ok(new ProfileImageResponse(profileUrl));
+        return ResponseEntity.ok(authService.createProfileImagePresignedUrl(request));
     }
     
-    // 프로필 이미지 수정
-    @PostMapping(value = "/profile-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping("/profile-image/presigned-url")
     @Operation(
-        summary = "프로필 이미지 수정",
-        description = "FormData의 file 필드로 프로필 이미지를 업로드하고 사용자 profile_url을 갱신"
+        summary = "프로필 이미지 수정용 Presigned URL 발급",
+        description = "로그인 사용자의 프로필 이미지 수정을 위한 S3 직접 업로드 URL을 반환"
+    )
+    public ResponseEntity<ProfileImagePresignedUrlResponse> createProfileImageForUpdate(
+        @RequestHeader("Authorization") String authHeader,
+        @RequestBody @Valid ProfileImagePresignedUrlRequest request
+    ) {
+        String accessToken = extractBearerToken(authHeader);
+        jwtProvider.isTokenValid(accessToken);
+
+        return ResponseEntity.ok(authService.createProfileImagePresignedUrl(request));
+    }
+
+    // 프로필 이미지 수정 확정
+    @PostMapping("/profile-image")
+    @Operation(
+        summary = "프로필 이미지 수정 확정",
+        description = "S3 업로드 완료 후 object key로 사용자 profile_url을 갱신하고 이전 이미지를 삭제"
     )
     public ResponseEntity<ProfileImageResponse> uploadProfileImage(
         @RequestHeader("Authorization") String authHeader,
-        @RequestParam("file") MultipartFile file
+        @RequestBody @Valid ProfileImageUpdateRequest request
     ) {
         String accessToken = extractBearerToken(authHeader);
         jwtProvider.isTokenValid(accessToken);
 
         UUID userId = UUID.fromString(jwtProvider.extractUserId(accessToken));
-        String profileUrl = authService.uploadProfileImage(userId, file);
+        String profileUrl = authService.updateProfileImage(userId, request.objectKey());
 
         return ResponseEntity.ok(new ProfileImageResponse(profileUrl));
     }

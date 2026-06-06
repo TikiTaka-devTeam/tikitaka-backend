@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.tikitaka.backend.global.config.SwaggerConfig;
 import com.tikitaka.backend.global.config.security.CurrentUserProvider;
+import com.tikitaka.backend.global.storage.S3StorageService;
 import com.tikitaka.backend.user.dto.UserProfileResponse;
 import com.tikitaka.backend.user.entity.User;
 
@@ -27,6 +28,7 @@ import lombok.RequiredArgsConstructor;
 public class UserController {
 
     private final CurrentUserProvider currentUserProvider;
+    private final S3StorageService s3StorageService;
 
     @GetMapping
     @Operation(
@@ -44,6 +46,7 @@ public class UserController {
     })
     public ResponseEntity<UserProfileResponse> getMyProfile() {
         User currentUser = currentUserProvider.getCurrentUser();
-        return ResponseEntity.ok(UserProfileResponse.from(currentUser));
+        String profileUrl = s3StorageService.toCloudFrontUrl(currentUser.getProfileUrl());
+        return ResponseEntity.ok(UserProfileResponse.from(currentUser, profileUrl));
     }
 }
