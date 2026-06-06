@@ -55,6 +55,10 @@ public class SharedStroke {
     @Builder.Default
     private Integer strokeOrder = 0;
 
+    @Column(name = "stroke_seq", columnDefinition = "integer default 0", nullable = false)
+    @Builder.Default
+    private Integer strokeSeq = 0;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

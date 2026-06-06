@@ -21,6 +21,7 @@ public class StrokeResponse {
     private String color;
     private Float thickness;
     private Integer strokeOrder;
+    private Integer strokeSeq;
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -45,6 +46,7 @@ public class StrokeResponse {
                 .color(stroke.getColor())
                 .thickness(stroke.getThickness())
                 .strokeOrder(stroke.getStrokeOrder())
+                .strokeSeq(stroke.getStrokeSeq())
                 .build();
     }
 
