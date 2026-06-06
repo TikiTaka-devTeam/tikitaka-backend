@@ -1,5 +1,6 @@
 package com.tikitaka.backend.auth.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.tikitaka.backend.user.entity.Role;
 
 import lombok.Getter;
@@ -35,6 +36,18 @@ public class SignUpRequest {
 
     private String phoneNumber; // 선택
     private String memberIdNumber; // 선택
-    // 프로필 사진 URL 추가
+
+    @JsonProperty("profile_image_key")
+    private String profileImageKey; // 선택
+
+    // 이전 클라이언트 호환용. S3 전환 후에는 object key를 담는다.
     private String profileUrl; // 선택
+
+    public String getProfileImageKeyOrLegacyProfileUrl() {
+        if (profileImageKey != null && !profileImageKey.isBlank()) {
+            return profileImageKey;
+        }
+
+        return profileUrl;
+    }
 }
