@@ -1,5 +1,6 @@
 package com.tikitaka.backend.slide.service;
 
+import com.tikitaka.backend.global.storage.S3StorageService;
 import com.tikitaka.backend.slide.dto.PdfSlideConvertResult;
 import lombok.RequiredArgsConstructor;
 import org.apache.pdfbox.Loader;
@@ -11,10 +12,10 @@ import org.springframework.web.server.ResponseStatusException;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,23 +25,15 @@ public class PdfSlideConvertService {
 
     private static final int RENDER_DPI = 150;
 
+    private final S3StorageService s3StorageService;
+
     public PdfSlideConvertResult convertPdfToSlideImages(Path pdfPath, String documentFileKey) {
         try {
             if (pdfPath == null || !Files.exists(pdfPath)) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "PDF 파일을 찾을 수 없습니다.");
             }
 
-            Path slideUploadDir = Paths.get(
-                    System.getProperty("user.dir"),
-                    "uploads",
-                    "slides",
-                    documentFileKey
-            ).toAbsolutePath().normalize();
-
-            Files.createDirectories(slideUploadDir);
-
             List<String> slideImageUrls = new ArrayList<>();
-
             File pdfFile = pdfPath.toFile();
 
             try (PDDocument pdfDocument = Loader.loadPDF(pdfFile)) {
@@ -53,16 +46,21 @@ public class PdfSlideConvertService {
                     int pageNumber = pageIndex + 1;
                     String imageFileName = "page_" + pageNumber + ".png";
 
-                    Path imagePath = slideUploadDir.resolve(imageFileName).toAbsolutePath().normalize();
+                    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                    ImageIO.write(image, "png", outputStream);
 
-                    ImageIO.write(image, "png", imagePath.toFile());
+                    String imageUrl = s3StorageService.uploadLectureSlideImage(
+                            documentFileKey,
+                            imageFileName,
+                            outputStream.toByteArray(),
+                            "image/png"
+                    );
 
-                    String imageUrl = "/uploads/slides/" + documentFileKey + "/" + imageFileName;
                     slideImageUrls.add(imageUrl);
                 }
 
                 String thumbnailUrl = slideImageUrls.isEmpty()
-                        ? "/uploads/materials/default-thumbnail.png"
+                        ? null
                         : slideImageUrls.get(0);
 
                 return new PdfSlideConvertResult(
