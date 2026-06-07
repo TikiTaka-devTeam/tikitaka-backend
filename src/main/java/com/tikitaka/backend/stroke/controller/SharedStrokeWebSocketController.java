@@ -48,13 +48,6 @@ public class SharedStrokeWebSocketController {
     private final ConcurrentHashMap<UUID, AtomicInteger> slideSeqCounters =
             new ConcurrentHashMap<>();
 
-    /**
-     * 교수 필기 수신 → strokeSeq 부여 → Redis 임시 저장 → 브로드캐스트
-     *
-     * DB 저장은 REST API(/shared-strokes)에서만 처리한다.
-     * WebSocket에서 DB 저장까지 하면 REST 저장과 중복되어
-     * points 2개짜리 직선 stroke가 같이 저장되는 문제가 생긴다.
-     */
     @MessageMapping("/spaces/{spaceId}/slides/{slideId}/shared-strokes")
     @Transactional(readOnly = true)
     public void handleSharedStroke(
@@ -74,6 +67,22 @@ public class SharedStrokeWebSocketController {
         slideRepository.findById(slideId)
                 .orElseThrow(() -> new CustomException(ErrorCode.SLIDE_NOT_FOUND));
 
+        String type = message.getType();
+
+        if ("SHARED_STROKE_DELETE".equals(type) || "SHARED_STROKE_DELETED".equals(type)) {
+            handleSharedStrokeDelete(spaceId, slideId, message);
+            return;
+        }
+
+        handleSharedStrokeCreate(spaceId, slideId, message);
+    }
+
+    // 교수 필기 생성 브로드캐스트
+    private void handleSharedStrokeCreate(
+            UUID spaceId,
+            UUID slideId,
+            SharedStrokeMessage message
+    ) {
         SharedStrokeMessage.StrokeData strokeData = message.getStroke();
 
         if (strokeData == null || strokeData.getPoints() == null || strokeData.getPoints().isEmpty()) {
@@ -113,16 +122,52 @@ public class SharedStrokeWebSocketController {
         );
 
         log.debug(
-                "WS: 공유 필기 브로드캐스트 전용 처리. liveStrokeId={}, strokeSeq={}, points={}",
+                "WS: 공유 필기 생성 브로드캐스트. strokeId={}, strokeSeq={}, points={}",
                 liveStrokeId,
                 strokeSeq,
                 strokeData.getPoints().size()
         );
     }
 
-    /**
-     * 학생이 stroke 수신 확인 ACK 전송
-     */
+    // 교수 필기 삭제 브로드캐스트
+    private void handleSharedStrokeDelete(
+            UUID spaceId,
+            UUID slideId,
+            SharedStrokeMessage message
+    ) {
+        if (message.getStrokeId() == null) {
+            log.warn("WS: 삭제할 strokeId 없음. slideId={}", slideId);
+            return;
+        }
+
+        int strokeSeq = nextLiveStrokeSeq(slideId);
+
+        SharedStrokeMessage broadcast = SharedStrokeMessage.builder()
+                .type("SHARED_STROKE_DELETED")
+                .strokeId(message.getStrokeId())
+                .slideId(slideId)
+                .strokeSeq(strokeSeq)
+                .stroke(
+                        SharedStrokeMessage.StrokeData.builder()
+                                .points(Collections.emptyList())
+                                .build()
+                )
+                .build();
+
+        strokeRedisService.saveStroke(slideId, strokeSeq, broadcast);
+
+        messagingTemplate.convertAndSend(
+                strokesTopic(spaceId, slideId),
+                broadcast
+        );
+
+        log.debug(
+                "WS: 공유 필기 삭제 브로드캐스트. strokeId={}, strokeSeq={}",
+                message.getStrokeId(),
+                strokeSeq
+        );
+    }
+
     @MessageMapping("/spaces/{spaceId}/slides/{slideId}/ack")
     public void handleAck(
             @DestinationVariable UUID spaceId,
@@ -147,9 +192,6 @@ public class SharedStrokeWebSocketController {
         );
     }
 
-    /**
-     * 학생이 누락된 stroke 재요청
-     */
     @MessageMapping("/spaces/{spaceId}/slides/{slideId}/resync")
     @Transactional(readOnly = true)
     public void handleResync(
@@ -187,7 +229,7 @@ public class SharedStrokeWebSocketController {
 
         for (SharedStrokeMessage stroke : missing) {
             SharedStrokeMessage resyncMsg = SharedStrokeMessage.builder()
-                    .type("SHARED_STROKE_RESYNC")
+                    .type(stroke.getType() != null ? stroke.getType() : "SHARED_STROKE_RESYNC")
                     .strokeId(stroke.getStrokeId())
                     .slideId(slideId)
                     .strokeSeq(stroke.getStrokeSeq())
