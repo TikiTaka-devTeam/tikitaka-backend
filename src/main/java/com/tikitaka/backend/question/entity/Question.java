@@ -64,9 +64,17 @@ public class Question {
     @Builder.Default
     private QuestionStatus status = QuestionStatus.PENDING;
 
-    // pgvector 확장 사용 → Sentence-BERT 768차원 임베딩
-    @Column(name = "embedding", columnDefinition = "vector(768)")
-    private float[] embedding;
+    /*
+     * pgvector 확장 사용 예정 필드입니다.
+     *
+     * 현재 RDS/PostgreSQL에 pgvector extension이 활성화되어 있지 않으면
+     * columnDefinition = "vector(768)" 때문에 questions 테이블 생성이 실패할 수 있습니다.
+     *
+     * AI 질문 임베딩 기능을 실제로 사용할 때 아래 필드를 다시 활성화하고,
+     * DB에서 CREATE EXTENSION vector; 설정을 적용한 뒤 사용하면 됩니다.
+     */
+    // @Column(name = "embedding", columnDefinition = "vector(768)")
+    // private float[] embedding;
 
     // AI 정제 완료 여부
     @Column(name = "is_refined", nullable = false)
