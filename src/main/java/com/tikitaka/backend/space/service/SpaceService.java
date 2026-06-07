@@ -15,6 +15,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 import com.tikitaka.backend.document.entity.Document;
 import com.tikitaka.backend.document.repository.DocumentRepository;
+import com.tikitaka.backend.global.storage.S3StorageService;
 import com.tikitaka.backend.space.dto.DocumentSummaryResponse;
 
 import com.tikitaka.backend.slide.dto.PdfSlideConvertResult;
@@ -63,6 +64,7 @@ public class SpaceService {
     private final DocumentRepository documentRepository;
     private final SlideRepository slideRepository;
     private final PdfSlideConvertService pdfSlideConvertService;
+    private final S3StorageService s3StorageService;
     private static final int SPACE_CODE_LENGTH = 8;
     private static final String SPACE_CODE_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     private static final Set<String> ALLOWED_DAYS = Set.of(
@@ -408,58 +410,67 @@ public class SpaceService {
         }
 
         String documentFileKey = UUID.randomUUID().toString();
-        String storedFileName = documentFileKey + "_" + originalFilename;
 
-        Path uploadDir = Paths.get(
-                System.getProperty("user.dir"),
-                "uploads",
-                "materials"
-        ).toAbsolutePath().normalize();
-
-        Path filePath = uploadDir.resolve(storedFileName).toAbsolutePath().normalize();
+        Path tempPdfPath = null;
 
         try {
-            Files.createDirectories(uploadDir);
-            Files.copy(file.getInputStream(), filePath);
-        } catch (IOException e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "파일 저장 중 오류가 발생했습니다.");
-        }
+            tempPdfPath = Files.createTempFile("lecture-" + documentFileKey + "-", ".pdf");
+            Files.copy(file.getInputStream(), tempPdfPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 
-        String pdfUrl = "/uploads/materials/" + storedFileName;
+            String pdfUrl = s3StorageService.uploadLecturePdf(
+                    documentFileKey,
+                    originalFilename,
+                    file
+            );
 
-        PdfSlideConvertResult convertResult = pdfSlideConvertService.convertPdfToSlideImages(
-                filePath,
-                documentFileKey
-        );
+            PdfSlideConvertResult convertResult = pdfSlideConvertService.convertPdfToSlideImages(
+                    tempPdfPath,
+                    documentFileKey
+            );
 
-        Document document = documentRepository.save(Document.builder()
-                .space(space)
-                .title(title)
-                .thumbnailUrl(convertResult.thumbnailUrl())
-                .pdfUrl(pdfUrl)
-                .pdfPageCount(convertResult.pageCount())
-                .version(1)
-                .build());
-
-        for (int i = 0; i < convertResult.slideImageUrls().size(); i++) {
-            Slide slide = Slide.builder()
-                    .document(document)
-                    .pageNumber(i + 1)
+            Document document = documentRepository.save(Document.builder()
+                    .space(space)
+                    .title(title)
+                    .thumbnailUrl(convertResult.thumbnailUrl())
+                    .pdfUrl(pdfUrl)
+                    .pdfPageCount(convertResult.pageCount())
                     .version(1)
-                    .imageUrl(convertResult.slideImageUrls().get(i))
-                    .isReplaced(false)
-                    .isDeleted(false)
-                    .build();
+                    .build());
 
-            slideRepository.save(slide);
+            for (int i = 0; i < convertResult.slideImageUrls().size(); i++) {
+                Slide slide = Slide.builder()
+                        .document(document)
+                        .pageNumber(i + 1)
+                        .version(1)
+                        .imageUrl(convertResult.slideImageUrls().get(i))
+                        .isReplaced(false)
+                        .isDeleted(false)
+                        .build();
+
+                slideRepository.save(slide);
+            }
+
+            return new CreateDocumentResponse(
+                    document.getId(),
+                    space.getId(),
+                    document.getTitle(),
+                    document.getPdfUrl(),
+                    document.getThumbnailUrl()
+            );
+        } catch (ResponseStatusException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ResponseStatusException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "강의자료 등록 중 오류가 발생했습니다."
+            );
+        } finally {
+            if (tempPdfPath != null) {
+                try {
+                    Files.deleteIfExists(tempPdfPath);
+                } catch (Exception ignored) {
+                }
+            }
         }
-
-        return new CreateDocumentResponse(
-                document.getId(),
-                space.getId(),
-                document.getTitle(),
-                document.getPdfUrl(),
-                document.getThumbnailUrl()
-        );
     }
 }
