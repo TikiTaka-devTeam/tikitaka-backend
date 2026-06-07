@@ -5,9 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tikitaka.backend.global.exception.CustomException;
 import com.tikitaka.backend.global.exception.ErrorCode;
 import com.tikitaka.backend.global.jwt.JwtProvider;
-import com.tikitaka.backend.layer.entity.SharedLayer;
-import com.tikitaka.backend.layer.repository.SharedLayerRepository;
-import com.tikitaka.backend.slide.entity.Slide;
 import com.tikitaka.backend.slide.repository.SlideRepository;
 import com.tikitaka.backend.stroke.dto.SharedStrokeMessage;
 import com.tikitaka.backend.stroke.dto.StrokeAckMessage;
@@ -16,7 +13,6 @@ import com.tikitaka.backend.stroke.dto.StrokeResyncRequest;
 import com.tikitaka.backend.stroke.entity.SharedStroke;
 import com.tikitaka.backend.stroke.repository.SharedStrokeRepository;
 import com.tikitaka.backend.stroke.service.StrokeRedisService;
-import com.tikitaka.backend.stroke.util.StrokePointSampler;
 import com.tikitaka.backend.user.entity.Role;
 import com.tikitaka.backend.user.entity.User;
 import com.tikitaka.backend.user.repository.UserRepository;
@@ -45,19 +41,22 @@ public class SharedStrokeWebSocketController {
     private final JwtProvider jwtProvider;
     private final UserRepository userRepository;
     private final SlideRepository slideRepository;
-    private final SharedLayerRepository sharedLayerRepository;
     private final SharedStrokeRepository sharedStrokeRepository;
     private final StrokeRedisService strokeRedisService;
     private final ObjectMapper objectMapper;
 
-    // 슬라이드별 strokeSeq 카운터 (서버 재시작 시 DB에서 초기화)
-    private final ConcurrentHashMap<UUID, AtomicInteger> slideSeqCounters = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, AtomicInteger> slideSeqCounters =
+            new ConcurrentHashMap<>();
 
     /**
-     * 교수 필기 수신 → strokeSeq 부여 → 좌표 샘플링 → DB + Redis 저장 → 브로드캐스트
+     * 교수 필기 수신 → strokeSeq 부여 → Redis 임시 저장 → 브로드캐스트
+     *
+     * DB 저장은 REST API(/shared-strokes)에서만 처리한다.
+     * WebSocket에서 DB 저장까지 하면 REST 저장과 중복되어
+     * points 2개짜리 직선 stroke가 같이 저장되는 문제가 생긴다.
      */
     @MessageMapping("/spaces/{spaceId}/slides/{slideId}/shared-strokes")
-    @Transactional
+    @Transactional(readOnly = true)
     public void handleSharedStroke(
             @DestinationVariable UUID spaceId,
             @DestinationVariable UUID slideId,
@@ -72,53 +71,40 @@ public class SharedStrokeWebSocketController {
             return;
         }
 
-        Slide slide = slideRepository.findById(slideId)
+        slideRepository.findById(slideId)
                 .orElseThrow(() -> new CustomException(ErrorCode.SLIDE_NOT_FOUND));
-
-        SharedLayer layer = sharedLayerRepository.findBySlideAndUser(slide, user)
-                .orElseGet(() -> sharedLayerRepository.save(
-                        SharedLayer.builder().slide(slide).user(user).build()
-                ));
 
         SharedStrokeMessage.StrokeData strokeData = message.getStroke();
 
-        // 좌표 샘플링 + 최대 포인트 제한
-        List<StrokePoint> sampledPoints = StrokePointSampler.sample(strokeData.getPoints());
+        if (strokeData == null || strokeData.getPoints() == null || strokeData.getPoints().isEmpty()) {
+            log.warn("WS: 비어있는 공유 필기 수신. slideId={}", slideId);
+            return;
+        }
 
-        // 서버가 strokeSeq 부여 (슬라이드별 단조 증가)
-        int strokeSeq = nextStrokeSeq(slideId, layer);
+        int strokeSeq = nextLiveStrokeSeq(slideId);
 
-        SharedStroke savedStroke = sharedStrokeRepository.save(
-                SharedStroke.builder()
-                        .layer(layer)
+        UUID liveStrokeId = message.getStrokeId() != null
+                ? message.getStrokeId()
+                : UUID.randomUUID();
+
+        SharedStrokeMessage.StrokeData broadcastStrokeData =
+                SharedStrokeMessage.StrokeData.builder()
                         .tool(strokeData.getTool())
-                        .points(toJson(sampledPoints))
-                        .content(strokeData.getContent())
+                        .points(strokeData.getPoints())
                         .color(strokeData.getColor() != null ? strokeData.getColor() : "#000000")
                         .thickness(strokeData.getThickness() != null ? strokeData.getThickness() : 2.0f)
+                        .content(strokeData.getContent())
                         .strokeOrder(strokeData.getStrokeOrder() != null ? strokeData.getStrokeOrder() : 0)
-                        .strokeSeq(strokeSeq)
-                        .build()
-        );
-
-        SharedStrokeMessage.StrokeData sampledStrokeData = SharedStrokeMessage.StrokeData.builder()
-                .tool(strokeData.getTool())
-                .points(sampledPoints)
-                .color(strokeData.getColor() != null ? strokeData.getColor() : "#000000")
-                .thickness(strokeData.getThickness() != null ? strokeData.getThickness() : 2.0f)
-                .content(strokeData.getContent())
-                .strokeOrder(strokeData.getStrokeOrder() != null ? strokeData.getStrokeOrder() : 0)
-                .build();
+                        .build();
 
         SharedStrokeMessage broadcast = SharedStrokeMessage.builder()
                 .type("SHARED_STROKE_CREATED")
-                .strokeId(savedStroke.getId())
+                .strokeId(liveStrokeId)
                 .slideId(slideId)
                 .strokeSeq(strokeSeq)
-                .stroke(sampledStrokeData)
+                .stroke(broadcastStrokeData)
                 .build();
 
-        // Redis에 임시 저장 (재접속/누락 복구용)
         strokeRedisService.saveStroke(slideId, strokeSeq, broadcast);
 
         messagingTemplate.convertAndSend(
@@ -126,13 +112,16 @@ public class SharedStrokeWebSocketController {
                 broadcast
         );
 
-        log.debug("WS: 공유 필기 브로드캐스트. strokeId={}, strokeSeq={}, points={}",
-                savedStroke.getId(), strokeSeq, sampledPoints.size());
+        log.debug(
+                "WS: 공유 필기 브로드캐스트 전용 처리. liveStrokeId={}, strokeSeq={}, points={}",
+                liveStrokeId,
+                strokeSeq,
+                strokeData.getPoints().size()
+        );
     }
 
     /**
      * 학생이 stroke 수신 확인 ACK 전송
-     * payload: { "lastReceivedStrokeSeq": 25 }
      */
     @MessageMapping("/spaces/{spaceId}/slides/{slideId}/ack")
     public void handleAck(
@@ -144,16 +133,22 @@ public class SharedStrokeWebSocketController {
         User user = resolveUser(accessor, spaceId, slideId);
         if (user == null || ackMessage.getLastReceivedStrokeSeq() == null) return;
 
-        strokeRedisService.saveAck(user.getId(), slideId, ackMessage.getLastReceivedStrokeSeq());
+        strokeRedisService.saveAck(
+                user.getId(),
+                slideId,
+                ackMessage.getLastReceivedStrokeSeq()
+        );
 
-        log.debug("WS: ACK 수신. userId={}, slideId={}, lastSeq={}",
-                user.getId(), slideId, ackMessage.getLastReceivedStrokeSeq());
+        log.debug(
+                "WS: ACK 수신. userId={}, slideId={}, lastSeq={}",
+                user.getId(),
+                slideId,
+                ackMessage.getLastReceivedStrokeSeq()
+        );
     }
 
     /**
      * 학생이 누락된 stroke 재요청
-     * payload: { "lastReceivedStrokeSeq": 24 }
-     * → 서버가 25번 이후 strokes를 해당 슬라이드 토픽으로 재전송
      */
     @MessageMapping("/spaces/{spaceId}/slides/{slideId}/resync")
     @Transactional(readOnly = true)
@@ -167,13 +162,18 @@ public class SharedStrokeWebSocketController {
         if (user == null || request.getLastReceivedStrokeSeq() == null) return;
 
         int lastSeq = request.getLastReceivedStrokeSeq();
-        log.debug("WS: 재동기화 요청. userId={}, slideId={}, lastSeq={}", user.getId(), slideId, lastSeq);
 
-        // Redis 우선 조회, 없으면 DB 폴백
-        List<SharedStrokeMessage> missing = strokeRedisService.getStrokesAfter(slideId, lastSeq);
+        log.debug(
+                "WS: 재동기화 요청. userId={}, slideId={}, lastSeq={}",
+                user.getId(),
+                slideId,
+                lastSeq
+        );
+
+        List<SharedStrokeMessage> missing =
+                strokeRedisService.getStrokesAfter(slideId, lastSeq);
 
         if (missing.isEmpty()) {
-            // Redis 캐시 미스 → DB에서 직접 조회
             missing = sharedStrokeRepository.findMissingStrokesBySlideId(slideId, lastSeq)
                     .stream()
                     .map(stroke -> toResyncMessage(slideId, stroke))
@@ -185,7 +185,6 @@ public class SharedStrokeWebSocketController {
             return;
         }
 
-        // 누락된 stroke를 동일 토픽으로 재전송 (클라이언트가 strokeSeq로 중복 제거)
         for (SharedStrokeMessage stroke : missing) {
             SharedStrokeMessage resyncMsg = SharedStrokeMessage.builder()
                     .type("SHARED_STROKE_RESYNC")
@@ -194,18 +193,24 @@ public class SharedStrokeWebSocketController {
                     .strokeSeq(stroke.getStrokeSeq())
                     .stroke(stroke.getStroke())
                     .build();
-            messagingTemplate.convertAndSend(strokesTopic(spaceId, slideId), resyncMsg);
+
+            messagingTemplate.convertAndSend(
+                    strokesTopic(spaceId, slideId),
+                    resyncMsg
+            );
         }
 
-        log.debug("WS: 재동기화 완료. slideId={}, 재전송 개수={}", slideId, missing.size());
+        log.debug(
+                "WS: 재동기화 완료. slideId={}, 재전송 개수={}",
+                slideId,
+                missing.size()
+        );
     }
 
-    // 슬라이드별 단조 증가 strokeSeq (서버 재시작 시 DB에서 초기값 복구)
-    private int nextStrokeSeq(UUID slideId, SharedLayer layer) {
-        return slideSeqCounters.computeIfAbsent(slideId, id -> {
-            int current = sharedStrokeRepository.findMaxStrokeSeqByLayer(layer).orElse(0);
-            return new AtomicInteger(current);
-        }).incrementAndGet();
+    private int nextLiveStrokeSeq(UUID slideId) {
+        return slideSeqCounters
+                .computeIfAbsent(slideId, id -> new AtomicInteger(0))
+                .incrementAndGet();
     }
 
     private SharedStrokeMessage toResyncMessage(UUID slideId, SharedStroke stroke) {
@@ -227,13 +232,17 @@ public class SharedStrokeWebSocketController {
 
     private User resolveUser(StompHeaderAccessor accessor, UUID spaceId, UUID slideId) {
         String token = extractToken(accessor);
+
         if (token == null) {
             log.warn("WS: Authorization 헤더 없음. spaceId={}, slideId={}", spaceId, slideId);
             return null;
         }
+
         try {
             jwtProvider.isTokenValid(token);
+
             UUID userId = UUID.fromString(jwtProvider.extractUserId(token));
+
             return userRepository.findById(userId)
                     .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
         } catch (Exception e) {
@@ -244,9 +253,11 @@ public class SharedStrokeWebSocketController {
 
     private String extractToken(StompHeaderAccessor accessor) {
         String authHeader = accessor.getFirstNativeHeader("Authorization");
+
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             return authHeader.substring(7);
         }
+
         return null;
     }
 
@@ -254,17 +265,12 @@ public class SharedStrokeWebSocketController {
         return "/topic/spaces/" + spaceId + "/slides/" + slideId + "/shared-strokes";
     }
 
-    private String toJson(Object obj) {
-        try {
-            return objectMapper.writeValueAsString(obj);
-        } catch (Exception e) {
-            throw new RuntimeException("JSON 직렬화 실패", e);
-        }
-    }
-
     private List<StrokePoint> parsePoints(String json) {
         try {
-            return objectMapper.readValue(json, new TypeReference<List<StrokePoint>>() {});
+            return objectMapper.readValue(
+                    json,
+                    new TypeReference<List<StrokePoint>>() {}
+            );
         } catch (Exception e) {
             return Collections.emptyList();
         }
