@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tikitaka.backend.global.exception.CustomException;
 import com.tikitaka.backend.global.exception.ErrorCode;
 import com.tikitaka.backend.global.jwt.JwtProvider;
-import com.tikitaka.backend.slide.repository.SlideRepository;
 import com.tikitaka.backend.stroke.dto.SharedStrokeMessage;
 import com.tikitaka.backend.stroke.dto.StrokeAckMessage;
 import com.tikitaka.backend.stroke.dto.StrokePoint;
@@ -29,8 +28,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 @Controller
@@ -40,16 +37,22 @@ public class SharedStrokeWebSocketController {
     private final SimpMessagingTemplate messagingTemplate;
     private final JwtProvider jwtProvider;
     private final UserRepository userRepository;
-    private final SlideRepository slideRepository;
     private final SharedStrokeRepository sharedStrokeRepository;
     private final StrokeRedisService strokeRedisService;
     private final ObjectMapper objectMapper;
 
-    private final ConcurrentHashMap<UUID, AtomicInteger> slideSeqCounters =
-            new ConcurrentHashMap<>();
-
+    /**
+     * 교수 공유 필기 변경 신호 수신
+     *
+     * 기존 구조:
+     * - WebSocket 메시지를 받으면 SharedStroke를 DB에 다시 저장
+     *
+     * 변경 구조:
+     * - 실제 저장은 REST API(/api/v1/slides/{slideId}/shared-strokes)에서 처리
+     * - WebSocket은 학생들에게 "해당 슬라이드의 교수 필기가 변경됨" 신호만 브로드캐스트
+     * - 학생 프론트는 이 신호를 받으면 현재 슬라이드 필기 목록을 다시 조회
+     */
     @MessageMapping("/spaces/{spaceId}/slides/{slideId}/shared-strokes")
-    @Transactional(readOnly = true)
     public void handleSharedStroke(
             @DestinationVariable UUID spaceId,
             @DestinationVariable UUID slideId,
@@ -57,117 +60,40 @@ public class SharedStrokeWebSocketController {
             StompHeaderAccessor accessor
     ) {
         User user = resolveUser(accessor, spaceId, slideId);
-        if (user == null) return;
+
+        if (user == null) {
+            return;
+        }
 
         if (user.getRole() != Role.PROFESSOR) {
-            log.warn("WS: 교수가 아닌 사용자의 공유 필기 시도. userId={}", user.getId());
+            log.warn("WS: 교수가 아닌 사용자의 공유 필기 변경 신호 시도. userId={}", user.getId());
             return;
         }
-
-        slideRepository.findById(slideId)
-                .orElseThrow(() -> new CustomException(ErrorCode.SLIDE_NOT_FOUND));
-
-        String type = message.getType();
-
-        if ("SHARED_STROKE_DELETE".equals(type) || "SHARED_STROKE_DELETED".equals(type)) {
-            handleSharedStrokeDelete(spaceId, slideId, message);
-            return;
-        }
-
-        handleSharedStrokeCreate(spaceId, slideId, message);
-    }
-
-    // 교수 필기 생성 브로드캐스트
-    private void handleSharedStrokeCreate(
-            UUID spaceId,
-            UUID slideId,
-            SharedStrokeMessage message
-    ) {
-        SharedStrokeMessage.StrokeData strokeData = message.getStroke();
-
-        if (strokeData == null || strokeData.getPoints() == null || strokeData.getPoints().isEmpty()) {
-            log.warn("WS: 비어있는 공유 필기 수신. slideId={}", slideId);
-            return;
-        }
-
-        int strokeSeq = nextLiveStrokeSeq(slideId);
-
-        UUID liveStrokeId = message.getStrokeId() != null
-                ? message.getStrokeId()
-                : UUID.randomUUID();
-
-        SharedStrokeMessage.StrokeData broadcastStrokeData =
-                SharedStrokeMessage.StrokeData.builder()
-                        .tool(strokeData.getTool())
-                        .points(strokeData.getPoints())
-                        .color(strokeData.getColor() != null ? strokeData.getColor() : "#000000")
-                        .thickness(strokeData.getThickness() != null ? strokeData.getThickness() : 2.0f)
-                        .content(strokeData.getContent())
-                        .strokeOrder(strokeData.getStrokeOrder() != null ? strokeData.getStrokeOrder() : 0)
-                        .build();
 
         SharedStrokeMessage broadcast = SharedStrokeMessage.builder()
-                .type("SHARED_STROKE_CREATED")
-                .strokeId(liveStrokeId)
-                .slideId(slideId)
-                .strokeSeq(strokeSeq)
-                .stroke(broadcastStrokeData)
-                .build();
-
-        strokeRedisService.saveStroke(slideId, strokeSeq, broadcast);
-
-        messagingTemplate.convertAndSend(
-                strokesTopic(spaceId, slideId),
-                broadcast
-        );
-
-        log.debug(
-                "WS: 공유 필기 생성 브로드캐스트. strokeId={}, strokeSeq={}, points={}",
-                liveStrokeId,
-                strokeSeq,
-                strokeData.getPoints().size()
-        );
-    }
-
-    // 교수 필기 삭제 브로드캐스트
-    private void handleSharedStrokeDelete(
-            UUID spaceId,
-            UUID slideId,
-            SharedStrokeMessage message
-    ) {
-        if (message.getStrokeId() == null) {
-            log.warn("WS: 삭제할 strokeId 없음. slideId={}", slideId);
-            return;
-        }
-
-        int strokeSeq = nextLiveStrokeSeq(slideId);
-
-        SharedStrokeMessage broadcast = SharedStrokeMessage.builder()
-                .type("SHARED_STROKE_DELETED")
+                .type("SHARED_STROKE_CHANGED")
                 .strokeId(message.getStrokeId())
                 .slideId(slideId)
-                .strokeSeq(strokeSeq)
-                .stroke(
-                        SharedStrokeMessage.StrokeData.builder()
-                                .points(Collections.emptyList())
-                                .build()
-                )
+                .strokeSeq(message.getStrokeSeq())
+                .stroke(message.getStroke())
                 .build();
-
-        strokeRedisService.saveStroke(slideId, strokeSeq, broadcast);
 
         messagingTemplate.convertAndSend(
                 strokesTopic(spaceId, slideId),
                 broadcast
         );
 
-        log.debug(
-                "WS: 공유 필기 삭제 브로드캐스트. strokeId={}, strokeSeq={}",
-                message.getStrokeId(),
-                strokeSeq
-        );
+        log.debug("WS: 공유 필기 변경 신호 브로드캐스트. spaceId={}, slideId={}", spaceId, slideId);
     }
 
+    /**
+     * 학생이 stroke 수신 확인 ACK 전송
+     *
+     * payload 예시:
+     * {
+     *   "lastReceivedStrokeSeq": 25
+     * }
+     */
     @MessageMapping("/spaces/{spaceId}/slides/{slideId}/ack")
     public void handleAck(
             @DestinationVariable UUID spaceId,
@@ -176,7 +102,10 @@ public class SharedStrokeWebSocketController {
             StompHeaderAccessor accessor
     ) {
         User user = resolveUser(accessor, spaceId, slideId);
-        if (user == null || ackMessage.getLastReceivedStrokeSeq() == null) return;
+
+        if (user == null || ackMessage.getLastReceivedStrokeSeq() == null) {
+            return;
+        }
 
         strokeRedisService.saveAck(
                 user.getId(),
@@ -192,6 +121,17 @@ public class SharedStrokeWebSocketController {
         );
     }
 
+    /**
+     * 학생이 누락된 stroke 재요청
+     *
+     * payload 예시:
+     * {
+     *   "lastReceivedStrokeSeq": 24
+     * }
+     *
+     * 현재 구조에서는 Redis에 변경 신호만 저장하지 않으므로,
+     * Redis 캐시가 비어 있으면 DB에서 stroke를 조회해 재전송합니다.
+     */
     @MessageMapping("/spaces/{spaceId}/slides/{slideId}/resync")
     @Transactional(readOnly = true)
     public void handleResync(
@@ -201,7 +141,10 @@ public class SharedStrokeWebSocketController {
             StompHeaderAccessor accessor
     ) {
         User user = resolveUser(accessor, spaceId, slideId);
-        if (user == null || request.getLastReceivedStrokeSeq() == null) return;
+
+        if (user == null || request.getLastReceivedStrokeSeq() == null) {
+            return;
+        }
 
         int lastSeq = request.getLastReceivedStrokeSeq();
 
@@ -228,8 +171,8 @@ public class SharedStrokeWebSocketController {
         }
 
         for (SharedStrokeMessage stroke : missing) {
-            SharedStrokeMessage resyncMsg = SharedStrokeMessage.builder()
-                    .type(stroke.getType() != null ? stroke.getType() : "SHARED_STROKE_RESYNC")
+            SharedStrokeMessage resyncMessage = SharedStrokeMessage.builder()
+                    .type("SHARED_STROKE_RESYNC")
                     .strokeId(stroke.getStrokeId())
                     .slideId(slideId)
                     .strokeSeq(stroke.getStrokeSeq())
@@ -238,21 +181,11 @@ public class SharedStrokeWebSocketController {
 
             messagingTemplate.convertAndSend(
                     strokesTopic(spaceId, slideId),
-                    resyncMsg
+                    resyncMessage
             );
         }
 
-        log.debug(
-                "WS: 재동기화 완료. slideId={}, 재전송 개수={}",
-                slideId,
-                missing.size()
-        );
-    }
-
-    private int nextLiveStrokeSeq(UUID slideId) {
-        return slideSeqCounters
-                .computeIfAbsent(slideId, id -> new AtomicInteger(0))
-                .incrementAndGet();
+        log.debug("WS: 재동기화 완료. slideId={}, 재전송 개수={}", slideId, missing.size());
     }
 
     private SharedStrokeMessage toResyncMessage(UUID slideId, SharedStroke stroke) {
@@ -261,14 +194,16 @@ public class SharedStrokeWebSocketController {
                 .strokeId(stroke.getId())
                 .slideId(slideId)
                 .strokeSeq(stroke.getStrokeSeq())
-                .stroke(SharedStrokeMessage.StrokeData.builder()
-                        .tool(stroke.getTool())
-                        .points(parsePoints(stroke.getPoints()))
-                        .color(stroke.getColor())
-                        .thickness(stroke.getThickness())
-                        .content(stroke.getContent())
-                        .strokeOrder(stroke.getStrokeOrder())
-                        .build())
+                .stroke(
+                        SharedStrokeMessage.StrokeData.builder()
+                                .tool(stroke.getTool())
+                                .points(parsePoints(stroke.getPoints()))
+                                .color(stroke.getColor())
+                                .thickness(stroke.getThickness())
+                                .content(stroke.getContent())
+                                .strokeOrder(stroke.getStrokeOrder())
+                                .build()
+                )
                 .build();
     }
 
