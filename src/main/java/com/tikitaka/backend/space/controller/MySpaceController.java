@@ -48,7 +48,7 @@ public class MySpaceController {
     @PostMapping("/{space_id}/access")
     @Operation(
         summary = "최근 Space 업데이트",
-        description = "Updates the approved member's last access time for the space."
+        description = "Space 최근 접속 시간을 업데이트 해요"
     )
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "Space access recorded"),

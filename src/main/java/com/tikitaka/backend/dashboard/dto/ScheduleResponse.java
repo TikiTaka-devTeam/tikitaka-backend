@@ -11,6 +11,7 @@ import java.util.UUID;
 public class ScheduleResponse {
     private UUID spaceId;
     private String spaceName;
+    private String color;
     private String day;
     private LocalTime startTime;
     private LocalTime endTime;
