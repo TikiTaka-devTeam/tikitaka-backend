@@ -12,6 +12,7 @@ public class NextSpaceResponse {
     private UUID spaceId;
     private String nickname;
     private String spaceName;
+    private String color;
     private String day;
     private LocalTime startTime;
     private String professorName;

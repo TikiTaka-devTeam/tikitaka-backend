@@ -73,6 +73,7 @@ public class DashboardService {
                 .spaceId(sc.getSpace().getId())
                 .nickname(sm != null ? sm.getNickname() : null)
                 .spaceName(sc.getSpace().getName())
+                .color(sc.getSpace().getColor())
                 .day(sc.getDay())
                 .startTime(sc.getStartTime())
                 .professorName(sc.getSpace().getProfessor().getName())
