@@ -1,10 +1,10 @@
 package com.tikitaka.backend.stroke.controller;
 
 import com.tikitaka.backend.global.config.SwaggerConfig;
-import com.tikitaka.backend.global.jwt.JwtProvider;
-import com.tikitaka.backend.global.exception.GlobalExceptionHandler;
 import com.tikitaka.backend.global.exception.CustomException;
 import com.tikitaka.backend.global.exception.ErrorCode;
+import com.tikitaka.backend.global.exception.GlobalExceptionHandler;
+import com.tikitaka.backend.global.jwt.JwtProvider;
 import com.tikitaka.backend.slide.entity.Slide;
 import com.tikitaka.backend.slide.repository.SlideRepository;
 import com.tikitaka.backend.stroke.dto.DeleteStrokeResponse;
@@ -13,6 +13,8 @@ import com.tikitaka.backend.stroke.dto.GetSharedStrokesResponse;
 import com.tikitaka.backend.stroke.dto.SaveStrokesRequest;
 import com.tikitaka.backend.stroke.dto.SaveStrokesResponse;
 import com.tikitaka.backend.stroke.dto.SharedStrokeMessage;
+import com.tikitaka.backend.stroke.entity.SharedStroke;
+import com.tikitaka.backend.stroke.repository.SharedStrokeRepository;
 import com.tikitaka.backend.stroke.service.StrokeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -41,6 +43,7 @@ public class StrokeController {
     private final JwtProvider jwtProvider;
     private final SimpMessagingTemplate messagingTemplate;
     private final SlideRepository slideRepository;
+    private final SharedStrokeRepository sharedStrokeRepository;
 
     @PostMapping("/api/v1/slides/{slide_id}/private-strokes")
     @Operation(summary = "개인 필기 작성 및 저장", description = "슬라이드에 개인 필기를 배치 저장합니다. 레이어가 없으면 자동 생성됩니다.")
@@ -181,6 +184,8 @@ public class StrokeController {
         DeleteStrokeResponse response =
                 strokeService.deleteSharedStroke(strokeId, userId);
 
+        publishSharedStrokeDeleted(strokeId);
+
         return ResponseEntity.ok(response);
     }
 
@@ -209,6 +214,25 @@ public class StrokeController {
                 .type("SHARED_STROKE_CHANGED")
                 .slideId(slideId)
                 .stroke(strokeData)
+                .build();
+
+        messagingTemplate.convertAndSend(
+                "/topic/spaces/" + spaceId + "/slides/" + slideId + "/shared-strokes",
+                broadcast
+        );
+    }
+
+    private void publishSharedStrokeDeleted(UUID strokeId) {
+        SharedStroke stroke = sharedStrokeRepository.findById(strokeId)
+                .orElseThrow(() -> new CustomException(ErrorCode.SHARED_STROKE_NOT_FOUND));
+
+        UUID slideId = stroke.getLayer().getSlide().getId();
+        UUID spaceId = stroke.getLayer().getSlide().getDocument().getSpace().getId();
+
+        SharedStrokeMessage broadcast = SharedStrokeMessage.builder()
+                .type("SHARED_STROKE_CHANGED")
+                .strokeId(strokeId)
+                .slideId(slideId)
                 .build();
 
         messagingTemplate.convertAndSend(
