@@ -268,6 +268,23 @@ public class SpaceService {
         );
     }
 
+    public void recordSpaceAccess(UUID userId, UUID spaceId) {
+        SpaceMember member = spaceMemberRepository.findBySpaceIdAndUserId(spaceId, userId)
+            .orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "Space membership not found."
+            ));
+
+        if (!"APPROVED".equals(member.getValidity())) {
+            throw new ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                "Only approved space members can record access."
+            );
+        }
+
+        member.recordAccess(OffsetDateTime.now(ZoneOffset.UTC));
+    }
+
     @Transactional(readOnly = true)
     public SpaceCodeResponse getSpaceCode(UUID professorId, UUID spaceId) {
         User professor = userRepository.findById(professorId)
