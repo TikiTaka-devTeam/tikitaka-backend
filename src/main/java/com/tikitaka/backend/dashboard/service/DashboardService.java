@@ -43,6 +43,7 @@ public class DashboardService {
                 .map(sc -> ScheduleResponse.builder()
                         .spaceId(sc.getSpace().getId())
                         .spaceName(sc.getSpace().getName())
+                        .color(sc.getSpace().getColor())
                         .day(sc.getDay())
                         .startTime(sc.getStartTime())
                         .endTime(sc.getEndTime())
