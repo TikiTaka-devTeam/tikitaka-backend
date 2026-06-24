@@ -13,6 +13,7 @@ import com.tikitaka.backend.stroke.entity.PrivateStroke;
 import com.tikitaka.backend.stroke.repository.PrivateStrokeRepository;
 import com.tikitaka.backend.user.entity.User;
 import lombok.RequiredArgsConstructor;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +30,7 @@ public class QuestionService {
     private final SlideRepository slideRepository;
     private final PrivateStrokeRepository privateStrokeRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Transactional
     public QuestionCreateResponse createQuestion(
@@ -61,6 +63,8 @@ public class QuestionService {
                 .build();
 
         Question savedQuestion = questionRepository.save(question);
+
+        publishQuestionCreated(savedQuestion);
 
         return QuestionCreateResponse.from(savedQuestion);
     }
@@ -118,7 +122,25 @@ public class QuestionService {
         Answer savedAnswer = answerRepository.save(answer);
 
         question.markAsAnswered();
+
         return AnswerCreateResponse.from(savedAnswer);
+    }
+
+    private void publishQuestionCreated(Question question) {
+        UUID slideId = question.getSlide().getId();
+        UUID spaceId = question.getSlide().getDocument().getSpace().getId();
+
+        QuestionCreatedMessage broadcast = QuestionCreatedMessage.builder()
+                .type("QUESTION_CREATED")
+                .slideId(slideId)
+                .questionId(question.getId())
+                .question(QuestionListResponse.from(question))
+                .build();
+
+        messagingTemplate.convertAndSend(
+                "/topic/spaces/" + spaceId + "/slides/" + slideId + "/questions",
+                broadcast
+        );
     }
 
     private boolean isStudent(User user) {
