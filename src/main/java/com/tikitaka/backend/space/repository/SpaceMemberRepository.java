@@ -11,6 +11,8 @@ import org.springframework.data.repository.query.Param;
 import com.tikitaka.backend.space.dto.SpaceMemberSummaryResponse;
 import com.tikitaka.backend.space.dto.SpaceSummaryResponse;
 import com.tikitaka.backend.space.entity.SpaceMember;
+import com.tikitaka.backend.user.entity.User;
+
 
 import io.swagger.v3.oas.annotations.Hidden;
 
@@ -64,4 +66,13 @@ public interface SpaceMemberRepository extends JpaRepository<SpaceMember, UUID> 
             @Param("userId") UUID userId,
             @Param("validity") String validity
     );
+
+    @Query("""
+    select sm.user
+    from SpaceMember sm
+    where sm.space.id = :spaceId
+      and sm.validity = 'APPROVED'
+      and sm.user.role = com.tikitaka.backend.user.entity.Role.STUDENT
+    """)
+    List<User> findApprovedStudentsBySpaceId(@Param("spaceId") UUID spaceId);
 }
