@@ -90,4 +90,8 @@ public class SpaceMember {
         this.deniedAt = deniedAt;
         this.approvedAt = null;
     }
+
+    public void recordAccess(OffsetDateTime accessedAt) {
+        this.lastAccessedAt = accessedAt;
+    }
 }

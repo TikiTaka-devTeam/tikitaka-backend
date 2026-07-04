@@ -45,6 +45,32 @@ public class MySpaceController {
     private final SpaceService spaceService;
     private final JwtProvider jwtProvider;
 
+    @PostMapping("/{space_id}/access")
+    @Operation(
+        summary = "최근 Space 업데이트",
+        description = "Space 최근 접속 시간을 업데이트 해요"
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "Space access recorded"),
+        @ApiResponse(responseCode = "401", description = "Invalid access token"),
+        @ApiResponse(responseCode = "403", description = "Space membership is not approved"),
+        @ApiResponse(responseCode = "404", description = "Space membership not found")
+    })
+    public ResponseEntity<Void> recordSpaceAccess(
+        @Parameter(hidden = true)
+        @RequestHeader("Authorization") String authHeader,
+        @Parameter(description = "Space ID", example = "123e4567-e89b-12d3-a456-426614174000")
+        @PathVariable("space_id") UUID spaceId
+    ) {
+        String accessToken = extractBearerToken(authHeader);
+        jwtProvider.isTokenValid(accessToken);
+
+        UUID userId = UUID.fromString(jwtProvider.extractUserId(accessToken));
+        spaceService.recordSpaceAccess(userId, spaceId);
+
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/{space_id}/members")
     @Operation(
         summary = "강의 참여자 목록 조회",
