@@ -24,27 +24,22 @@ public class Notification {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
-    // 알림 수신자
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    // DOCUMENT_UPLOADED | DOCUMENT_UPDATED
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "document_id")
     private Document document;
 
-    // ANSWER_POSTED
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "answer_id")
     private Answer answer;
 
-    // SPACE_NOTIFIED
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "notice_id")
     private SpaceNotice notice;
 
-    // DOCUMENT_UPLOADED | DOCUMENT_UPDATED | ANSWER_POSTED | SPACE_NOTIFIED
     @Column(name = "type", length = 50, nullable = false)
     private String type;
 
@@ -54,10 +49,6 @@ public class Notification {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
-
-    public void markAsRead() {
-        this.isRead = true;
-    }
 
     @PrePersist
     protected void onCreate() {
