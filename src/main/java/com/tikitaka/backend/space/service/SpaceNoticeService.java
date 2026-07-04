@@ -107,6 +107,7 @@ public class SpaceNoticeService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인이 생성한 강의의 공지만 삭제할 수 있습니다.");
         }
 
+        notificationService.deleteByNoticeId(notice);
         spaceNoticeRepository.delete(notice);
 
         return new DeleteSpaceNoticeResponse("공지가 삭제되었습니다.");

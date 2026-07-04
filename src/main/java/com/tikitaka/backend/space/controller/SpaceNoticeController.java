@@ -38,7 +38,7 @@ public class SpaceNoticeController {
     @GetMapping("/api/v1/spaces/{space_id}/notices")
     @Operation(
             summary = "스페이스 공지 목록 조회",
-            description = "강의 참여자 또는 담당 교수가 특정 스페이스의 공지 목록을 조회합니다."
+            description = "강의 참여자 또는 담당 교수가 스페이스 공지 목록을 조회합니다."
     )
     @ApiResponses({
             @ApiResponse(
@@ -54,10 +54,11 @@ public class SpaceNoticeController {
             @Parameter(hidden = true)
             @RequestHeader("Authorization") String authHeader,
 
-            @Parameter(description = "강의 ID", example = "123e4567-e89b-12d3-a456-426614174000")
+            @Parameter(description = "강의 ID", example = "123e4567-e89b-12d3-a456-426614174111")
             @PathVariable("space_id") UUID spaceId
     ) {
         UUID userId = extractUserId(authHeader);
+
         List<SpaceNoticeResponse> response = spaceNoticeService.getNotices(userId, spaceId);
 
         return ResponseEntity.ok(response);
@@ -66,7 +67,7 @@ public class SpaceNoticeController {
     @PostMapping("/api/v1/spaces/{space_id}/notices")
     @Operation(
             summary = "스페이스 공지 생성",
-            description = "교수가 본인이 생성한 스페이스에 공지를 생성합니다. 생성 시 승인된 학생들에게 알림이 생성됩니다."
+            description = "교수가 본인이 생성한 스페이스에 공지를 생성합니다. 생성 시 승인된 학생들에게 알림 데이터가 생성됩니다."
     )
     @ApiResponses({
             @ApiResponse(
@@ -83,12 +84,13 @@ public class SpaceNoticeController {
             @Parameter(hidden = true)
             @RequestHeader("Authorization") String authHeader,
 
-            @Parameter(description = "강의 ID", example = "123e4567-e89b-12d3-a456-426614174000")
+            @Parameter(description = "강의 ID", example = "123e4567-e89b-12d3-a456-426614174111")
             @PathVariable("space_id") UUID spaceId,
 
             @Valid @RequestBody CreateSpaceNoticeRequest request
     ) {
         UUID professorId = extractUserId(authHeader);
+
         SpaceNoticeResponse response = spaceNoticeService.createNotice(professorId, spaceId, request);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -114,12 +116,13 @@ public class SpaceNoticeController {
             @Parameter(hidden = true)
             @RequestHeader("Authorization") String authHeader,
 
-            @Parameter(description = "공지 ID", example = "123e4567-e89b-12d3-a456-426614174999")
+            @Parameter(description = "공지 ID", example = "123e4567-e89b-12d3-a456-426614174000")
             @PathVariable("notice_id") UUID noticeId,
 
             @Valid @RequestBody UpdateSpaceNoticeRequest request
     ) {
         UUID professorId = extractUserId(authHeader);
+
         SpaceNoticeResponse response = spaceNoticeService.updateNotice(professorId, noticeId, request);
 
         return ResponseEntity.ok(response);
@@ -144,10 +147,11 @@ public class SpaceNoticeController {
             @Parameter(hidden = true)
             @RequestHeader("Authorization") String authHeader,
 
-            @Parameter(description = "공지 ID", example = "123e4567-e89b-12d3-a456-426614174999")
+            @Parameter(description = "공지 ID", example = "123e4567-e89b-12d3-a456-426614174000")
             @PathVariable("notice_id") UUID noticeId
     ) {
         UUID professorId = extractUserId(authHeader);
+
         DeleteSpaceNoticeResponse response = spaceNoticeService.deleteNotice(professorId, noticeId);
 
         return ResponseEntity.ok(response);
