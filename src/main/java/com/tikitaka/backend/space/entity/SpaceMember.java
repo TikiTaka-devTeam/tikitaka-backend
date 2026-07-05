@@ -62,6 +62,10 @@ public class SpaceMember {
     @Schema(description = "사용자 기준 강의 별명", example = "운체")
     private String nickname;
 
+    @Column(name = "color", length = 20)
+    @Schema(description = "사용자 기준 강의 개인 색상", example = "#4F46E5")
+    private String color;
+
     @CreationTimestamp
     @Column(name = "requested_at", nullable = false, updatable = false, columnDefinition = "TIMESTAMPTZ DEFAULT NOW()")
     @Schema(description = "참여 요청 시각")
