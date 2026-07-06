@@ -32,13 +32,24 @@ public class QuestionController {
 
     @Operation(
             summary = "특정 슬라이드 질문 목록 조회",
-            description = "PDF 강의자료 옆 질문 목록 패널에서 사용할 특정 슬라이드의 질문 목록을 조회합니다. 질문 내용, AI 정제 질문, 좋아요 수, 위치, 상태값을 반환합니다."
+            description = "PDF 강의자료 옆 질문 목록 패널에서 사용할 특정 슬라이드의 질문 목록을 조회합니다. 질문 내용, AI 정제 질문, 좋아요 수, 좋아요 여부, 위치, 상태값을 반환합니다."
     )
     @GetMapping("/slides/{slideId}/questions")
     public List<QuestionListResponse> getQuestionsBySlide(
             @PathVariable UUID slideId
     ) {
         return questionService.getQuestionsBySlide(slideId);
+    }
+
+    @Operation(
+            summary = "특정 문서 전체 질문 목록 조회",
+            description = "특정 문서에 포함된 모든 슬라이드의 질문 목록을 조회합니다. 질문 내용, AI 정제 질문, 좋아요 수, 좋아요 여부, 위치, 상태값을 반환합니다."
+    )
+    @GetMapping("/documents/{documentId}/questions")
+    public List<QuestionListResponse> getQuestionsByDocument(
+            @PathVariable UUID documentId
+    ) {
+        return questionService.getQuestionsByDocument(documentId);
     }
 
     @Operation(
@@ -61,6 +72,28 @@ public class QuestionController {
             @PathVariable UUID questionId
     ) {
         return questionService.getQuestionDetail(questionId);
+    }
+
+    @Operation(
+            summary = "질문 좋아요",
+            description = "현재 로그인한 사용자가 특정 질문에 좋아요를 누릅니다. 이미 좋아요를 누른 경우 좋아요 수를 중복 증가시키지 않습니다."
+    )
+    @PostMapping("/questions/{questionId}/likes")
+    public QuestionLikeResponse likeQuestion(
+            @PathVariable UUID questionId
+    ) {
+        return questionService.likeQuestion(questionId);
+    }
+
+    @Operation(
+            summary = "질문 좋아요 취소",
+            description = "현재 로그인한 사용자가 특정 질문에 누른 좋아요를 취소합니다."
+    )
+    @DeleteMapping("/questions/{questionId}/likes")
+    public QuestionLikeResponse unlikeQuestion(
+            @PathVariable UUID questionId
+    ) {
+        return questionService.unlikeQuestion(questionId);
     }
 
     @Operation(

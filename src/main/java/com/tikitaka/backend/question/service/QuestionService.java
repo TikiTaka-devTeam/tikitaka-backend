@@ -4,8 +4,10 @@ import com.tikitaka.backend.global.config.security.CurrentUserProvider;
 import com.tikitaka.backend.question.answer.Answer;
 import com.tikitaka.backend.question.dto.*;
 import com.tikitaka.backend.question.entity.Question;
+import com.tikitaka.backend.question.entity.QuestionLike;
 import com.tikitaka.backend.question.enums.QuestionStatus;
 import com.tikitaka.backend.question.repository.AnswerRepository;
+import com.tikitaka.backend.question.repository.QuestionLikeRepository;
 import com.tikitaka.backend.question.repository.QuestionRepository;
 import com.tikitaka.backend.slide.entity.Slide;
 import com.tikitaka.backend.slide.repository.SlideRepository;
@@ -29,6 +31,7 @@ public class QuestionService {
     private final AnswerRepository answerRepository;
     private final SlideRepository slideRepository;
     private final PrivateStrokeRepository privateStrokeRepository;
+    private final QuestionLikeRepository questionLikeRepository;
     private final CurrentUserProvider currentUserProvider;
     private final SimpMessagingTemplate messagingTemplate;
 
@@ -70,9 +73,26 @@ public class QuestionService {
     }
 
     public List<QuestionListResponse> getQuestionsBySlide(UUID slideId) {
+        User currentUser = currentUserProvider.getCurrentUser();
+
         return questionRepository.findBySlideIdOrderByCreatedAtDesc(slideId)
                 .stream()
-                .map(QuestionListResponse::from)
+                .map(question -> QuestionListResponse.from(
+                        question,
+                        questionLikeRepository.existsByQuestionAndUser(question, currentUser)
+                ))
+                .toList();
+    }
+
+    public List<QuestionListResponse> getQuestionsByDocument(UUID documentId) {
+        User currentUser = currentUserProvider.getCurrentUser();
+
+        return questionRepository.findBySlideDocumentIdOrderByCreatedAtDesc(documentId)
+                .stream()
+                .map(question -> QuestionListResponse.from(
+                        question,
+                        questionLikeRepository.existsByQuestionAndUser(question, currentUser)
+                ))
                 .toList();
     }
 
@@ -91,6 +111,44 @@ public class QuestionService {
                 .orElse(null);
 
         return QuestionDetailResponse.from(question, answer);
+    }
+
+    @Transactional
+    public QuestionLikeResponse likeQuestion(UUID questionId) {
+        User currentUser = currentUserProvider.getCurrentUser();
+
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new IllegalArgumentException("질문을 찾을 수 없습니다."));
+
+        if (questionLikeRepository.existsByQuestionAndUser(question, currentUser)) {
+            return QuestionLikeResponse.of(question.getId(), true, question.getLikeCount());
+        }
+
+        QuestionLike questionLike = QuestionLike.builder()
+                .question(question)
+                .user(currentUser)
+                .build();
+
+        questionLikeRepository.save(questionLike);
+        question.increaseLikeCount();
+
+        return QuestionLikeResponse.of(question.getId(), true, question.getLikeCount());
+    }
+
+    @Transactional
+    public QuestionLikeResponse unlikeQuestion(UUID questionId) {
+        User currentUser = currentUserProvider.getCurrentUser();
+
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new IllegalArgumentException("질문을 찾을 수 없습니다."));
+
+        questionLikeRepository.findByQuestionAndUser(question, currentUser)
+                .ifPresent(questionLike -> {
+                    questionLikeRepository.delete(questionLike);
+                    question.decreaseLikeCount();
+                });
+
+        return QuestionLikeResponse.of(question.getId(), false, question.getLikeCount());
     }
 
     @Transactional

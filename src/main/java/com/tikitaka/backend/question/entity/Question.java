@@ -2,8 +2,8 @@ package com.tikitaka.backend.question.entity;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
-import com.tikitaka.backend.question.enums.QuestionStatus;
 
+import com.tikitaka.backend.question.enums.QuestionStatus;
 import org.hibernate.annotations.UuidGenerator;
 
 import com.tikitaka.backend.slide.entity.Slide;
@@ -96,6 +96,10 @@ public class Question {
         LocalDateTime now = LocalDateTime.now();
         this.createdAt = now;
         this.updatedAt = now;
+
+        if (this.likeCount == null) {
+            this.likeCount = 0;
+        }
     }
 
     @PreUpdate
@@ -105,5 +109,22 @@ public class Question {
 
     public void markAsAnswered() {
         this.status = QuestionStatus.ANSWERED;
+    }
+
+    public void increaseLikeCount() {
+        if (this.likeCount == null) {
+            this.likeCount = 0;
+        }
+
+        this.likeCount++;
+    }
+
+    public void decreaseLikeCount() {
+        if (this.likeCount == null || this.likeCount <= 0) {
+            this.likeCount = 0;
+            return;
+        }
+
+        this.likeCount--;
     }
 }

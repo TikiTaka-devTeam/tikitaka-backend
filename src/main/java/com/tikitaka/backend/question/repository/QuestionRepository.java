@@ -9,4 +9,6 @@ import java.util.UUID;
 public interface QuestionRepository extends JpaRepository<Question, UUID> {
 
     List<Question> findBySlideIdOrderByCreatedAtDesc(UUID slideId);
+
+    List<Question> findBySlideDocumentIdOrderByCreatedAtDesc(UUID documentId);
 }
