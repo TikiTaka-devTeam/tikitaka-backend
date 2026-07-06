@@ -38,6 +38,10 @@ import com.tikitaka.backend.space.dto.SpaceLookupScheduleResponse;
 import com.tikitaka.backend.space.dto.SpaceMemberStatusResponse;
 import com.tikitaka.backend.space.dto.SpaceMemberSummaryResponse;
 import com.tikitaka.backend.space.dto.SpaceSummaryResponse;
+import com.tikitaka.backend.space.dto.UpdateSpaceNicknameRequest;
+import com.tikitaka.backend.space.dto.UpdateSpaceNicknameResponse;
+import com.tikitaka.backend.space.dto.UpdateSpaceRequest;
+import com.tikitaka.backend.space.dto.UpdateSpaceResponse;
 import com.tikitaka.backend.space.entity.Schedule;
 import com.tikitaka.backend.space.entity.Space;
 import com.tikitaka.backend.space.entity.SpaceMember;
@@ -128,6 +132,7 @@ public class SpaceService {
             .user(professor)
             .validity("APPROVED")
             .nickname(request.nickname())
+            .color(request.color())
             .approvedAt(OffsetDateTime.now(ZoneOffset.UTC))
             .lastAccessedAt(OffsetDateTime.now(ZoneOffset.UTC))
             .build());
@@ -142,6 +147,62 @@ public class SpaceService {
         );
     }
 
+
+    public UpdateSpaceResponse updateSpace(UUID professorId, UUID spaceId, UpdateSpaceRequest request) {
+        User professor = userRepository.findById(professorId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
+
+        if (professor.getRole() != Role.PROFESSOR) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "교수만 강의 정보를 수정할 수 있습니다.");
+        }
+
+        Space space = spaceRepository.findById(spaceId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "강의를 찾을 수 없습니다."));
+
+        if (!space.getProfessor().getId().equals(professorId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인이 생성한 강의만 수정할 수 있습니다.");
+        }
+
+        String name = normalizeOptionalText(request.name());
+        String semester = normalizeOptionalText(request.semester());
+        String color = normalizeOptionalText(request.color());
+        boolean updateSchedules = request.schedules() != null;
+
+        if (name == null && semester == null && color == null && !updateSchedules) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "수정할 강의 정보가 필요합니다.");
+        }
+
+        if (updateSchedules && request.schedules().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "강의 시간은 최소 1개 이상이어야 합니다.");
+        }
+
+        if (name != null || semester != null || color != null) {
+            spaceRepository.updateSpaceInfo(spaceId, name, semester, color);
+        }
+
+        if (updateSchedules) {
+            scheduleRepository.deleteBySpaceId(spaceId);
+            saveSchedules(space, request.schedules());
+        }
+
+        List<SpaceLookupScheduleResponse> schedules = scheduleRepository
+            .findBySpaceIdOrderByDayAscStartTimeAsc(spaceId)
+            .stream()
+            .map(schedule -> new SpaceLookupScheduleResponse(
+                schedule.getDay(),
+                schedule.getStartTime().toString(),
+                schedule.getEndTime().toString()
+            ))
+            .toList();
+
+        return new UpdateSpaceResponse(
+            spaceId,
+            name != null ? name : space.getName(),
+            semester != null ? semester : space.getSemester(),
+            color != null ? color : space.getColor(),
+            schedules
+        );
+    }
     public JoinSpaceResponse joinSpace(UUID studentId, JoinSpaceRequest request) {
         User student = userRepository.findById(studentId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."));
@@ -163,6 +224,7 @@ public class SpaceService {
             .space(space)
             .user(student)
             .validity("PENDING")
+            .color(space.getColor())
             .build());
 
         return new JoinSpaceResponse(
@@ -268,6 +330,32 @@ public class SpaceService {
         );
     }
 
+
+    public UpdateSpaceNicknameResponse updateSpaceNickname(UUID userId, UUID spaceId, UpdateSpaceNicknameRequest request) {
+        SpaceMember member = spaceMemberRepository.findBySpaceIdAndUserId(spaceId, userId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Space membership not found."));
+
+        if (!"APPROVED".equals(member.getValidity())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only approved space members can update nickname or color.");
+        }
+
+        String nickname = normalizeOptionalText(request.nickname());
+        String color = normalizeOptionalText(request.color());
+
+        if (nickname == null && color == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nickname or color is required.");
+        }
+
+        spaceMemberRepository.updateNicknameAndColor(member.getId(), nickname, color);
+
+        String responseNickname = nickname != null ? nickname : member.getNickname();
+        String responseColor = color != null ? color : member.getColor();
+        if (responseColor == null || responseColor.isBlank()) {
+            responseColor = member.getSpace().getColor();
+        }
+
+        return new UpdateSpaceNicknameResponse(spaceId, responseNickname, responseColor);
+    }
     public void recordSpaceAccess(UUID userId, UUID spaceId) {
         SpaceMember member = spaceMemberRepository.findBySpaceIdAndUserId(spaceId, userId)
             .orElseThrow(() -> new ResponseStatusException(
@@ -323,6 +411,37 @@ public class SpaceService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "강의 참여 요청을 찾을 수 없습니다."));
     }
 
+
+
+    private void saveSchedules(Space space, List<CreateScheduleRequest> schedules) {
+        for (CreateScheduleRequest scheduleRequest : schedules) {
+            String day = scheduleRequest.day().toUpperCase(Locale.ROOT);
+            if (!ALLOWED_DAYS.contains(day)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요일 형식이 올바르지 않습니다.");
+            }
+
+            LocalTime startTime = parseTime(scheduleRequest.startTime(), "시작 시간 형식이 올바르지 않습니다.");
+            LocalTime endTime = parseTime(scheduleRequest.endTime(), "종료 시간 형식이 올바르지 않습니다.");
+
+            if (!startTime.isBefore(endTime)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "시작 시간은 종료 시간보다 빨라야 합니다.");
+            }
+
+            scheduleRepository.save(Schedule.builder()
+                .space(space)
+                .day(day)
+                .startTime(startTime)
+                .endTime(endTime)
+                .timezone(DEFAULT_TIMEZONE)
+                .build());
+        }
+    }
+    private String normalizeOptionalText(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
     private String generateUniqueSpaceCode() {
         String candidate;
         do {

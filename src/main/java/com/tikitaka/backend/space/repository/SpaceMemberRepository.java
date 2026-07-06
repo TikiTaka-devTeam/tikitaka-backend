@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -24,7 +25,7 @@ public interface SpaceMemberRepository extends JpaRepository<SpaceMember, UUID> 
             sm.space.name,
             sm.nickname,
             sm.space.semester,
-            sm.space.color,
+            coalesce(sm.color, sm.space.color),
             sm.space.professor.name
         )
         from SpaceMember sm
@@ -54,6 +55,18 @@ public interface SpaceMemberRepository extends JpaRepository<SpaceMember, UUID> 
 
     Optional<SpaceMember> findByIdAndSpaceId(UUID id, UUID spaceId);
 
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        update SpaceMember sm
+        set sm.nickname = coalesce(:nickname, sm.nickname),
+            sm.color = coalesce(:color, sm.color)
+        where sm.id = :memberId
+        """)
+    int updateNicknameAndColor(
+        @Param("memberId") UUID memberId,
+        @Param("nickname") String nickname,
+        @Param("color") String color
+    );
     @Query("""
     SELECT COUNT(sm) > 0
     FROM SpaceMember sm

@@ -52,9 +52,9 @@ public class MySpaceController {
     )
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "Space access recorded"),
-        @ApiResponse(responseCode = "401", description = "Invalid access token"),
-        @ApiResponse(responseCode = "403", description = "Space membership is not approved"),
-        @ApiResponse(responseCode = "404", description = "Space membership not found")
+        @ApiResponse(responseCode = "401", description = "유효하지 않은 액세스 토큰"),
+        @ApiResponse(responseCode = "403", description = "승인된 강의 참여자가 아님"),
+        @ApiResponse(responseCode = "404", description = "강의 참여 정보를 찾을 수 없음")
     })
     public ResponseEntity<Void> recordSpaceAccess(
         @Parameter(hidden = true)

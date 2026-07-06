@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -24,6 +25,10 @@ import com.tikitaka.backend.space.dto.JoinSpaceResponse;
 import com.tikitaka.backend.space.dto.SpaceCodeResponse;
 import com.tikitaka.backend.space.dto.SpaceLookupResponse;
 import com.tikitaka.backend.space.dto.SpaceSummaryResponse;
+import com.tikitaka.backend.space.dto.UpdateSpaceRequest;
+import com.tikitaka.backend.space.dto.UpdateSpaceResponse;
+import com.tikitaka.backend.space.dto.UpdateSpaceNicknameRequest;
+import com.tikitaka.backend.space.dto.UpdateSpaceNicknameResponse;
 import com.tikitaka.backend.space.service.SpaceService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -170,6 +175,69 @@ public class MainSpaceController {
         return ResponseEntity.ok(response);
     }
 
+    @PatchMapping("/{space_id}/nickname")
+    @Operation(
+        summary = "강의 별명 및 개인 색상 수정",
+        description = "현재 로그인한 사용자의 해당 강의 별명과 개인 색상을 수정합니다."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "강의 별명 및 개인 색상 수정 성공",
+            content = @Content(schema = @Schema(implementation = UpdateSpaceNicknameResponse.class))
+        ),
+        @ApiResponse(responseCode = "400", description = "별명 또는 색상 값이 필요함"),
+        @ApiResponse(responseCode = "401", description = "유효하지 않은 액세스 토큰"),
+        @ApiResponse(responseCode = "403", description = "승인된 강의 참여자가 아님"),
+        @ApiResponse(responseCode = "404", description = "강의 참여 정보를 찾을 수 없음")
+    })
+    public ResponseEntity<UpdateSpaceNicknameResponse> updateSpaceNickname(
+        @Parameter(hidden = true)
+        @RequestHeader("Authorization") String authHeader,
+        @Parameter(description = "강의 ID", example = "123e4567-e89b-12d3-a456-426614174000")
+        @PathVariable("space_id") UUID spaceId,
+        @RequestBody @Valid UpdateSpaceNicknameRequest request
+    ) {
+        String accessToken = extractBearerToken(authHeader);
+        jwtProvider.isTokenValid(accessToken);
+
+        UUID userId = UUID.fromString(jwtProvider.extractUserId(accessToken));
+        UpdateSpaceNicknameResponse response = spaceService.updateSpaceNickname(userId, spaceId, request);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @PatchMapping("/{space_id}")
+    @Operation(
+        summary = "강의 정보 수정",
+        description = "교수가 본인이 생성한 강의의 이름, 학기, 기본 색상, 일정을 수정합니다. 강의 코드는 수정할 수 없습니다."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "강의 정보 수정 성공",
+            content = @Content(schema = @Schema(implementation = UpdateSpaceResponse.class))
+        ),
+        @ApiResponse(responseCode = "400", description = "잘못된 요청 값"),
+        @ApiResponse(responseCode = "401", description = "유효하지 않은 액세스 토큰"),
+        @ApiResponse(responseCode = "403", description = "교수 권한이 아니거나 본인이 생성한 강의가 아님"),
+        @ApiResponse(responseCode = "404", description = "요청 사용자 또는 강의를 찾을 수 없음")
+    })
+    public ResponseEntity<UpdateSpaceResponse> updateSpace(
+        @Parameter(hidden = true)
+        @RequestHeader("Authorization") String authHeader,
+        @Parameter(description = "강의 ID", example = "123e4567-e89b-12d3-a456-426614174000")
+        @PathVariable("space_id") UUID spaceId,
+        @RequestBody @Valid UpdateSpaceRequest request
+    ) {
+        String accessToken = extractBearerToken(authHeader);
+        jwtProvider.isTokenValid(accessToken);
+
+        UUID professorId = UUID.fromString(jwtProvider.extractUserId(accessToken));
+        UpdateSpaceResponse response = spaceService.updateSpace(professorId, spaceId, request);
+
+        return ResponseEntity.ok(response);
+    }
     @PostMapping
     @Operation(
         summary = "강의 생성",
