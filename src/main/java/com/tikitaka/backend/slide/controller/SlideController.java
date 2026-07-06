@@ -3,6 +3,7 @@ package com.tikitaka.backend.slide.controller;
 import com.tikitaka.backend.slide.dto.SlideListResponse;
 import com.tikitaka.backend.slide.service.SlideService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -24,7 +25,8 @@ public class SlideController {
     )
     @GetMapping("/documents/{documentId}/slides")
     public List<SlideListResponse> getSlidesByDocument(
-            @PathVariable UUID documentId
+            @Parameter(description = "강의자료 ID", example = "123e4567-e89b-12d3-a456-426614174000")
+            @PathVariable("documentId") UUID documentId
     ) {
         return slideService.getSlidesByDocument(documentId);
     }
