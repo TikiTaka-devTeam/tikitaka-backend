@@ -3,12 +3,14 @@ package com.tikitaka.backend.user.service;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.tikitaka.backend.global.exception.CustomException;
 import com.tikitaka.backend.global.exception.ErrorCode;
+import com.tikitaka.backend.user.dto.UserChangePasswordRequest;
 import com.tikitaka.backend.user.dto.UserProfileUpdateRequest;
 import com.tikitaka.backend.user.entity.User;
 import com.tikitaka.backend.user.repository.UserRepository;
@@ -21,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public User updateMyProfile(UUID userId, UserProfileUpdateRequest request) {
         validateNotBlankIfPresent(request.name(), "이름은 비어 있을 수 없습니다.");
@@ -37,6 +40,17 @@ public class UserService {
         );
 
         return user;
+    }
+
+    public void changePassword(UUID userId, UserChangePasswordRequest request) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        if (user.getPassword() == null || !passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
+            throw new CustomException(ErrorCode.INVALID_PASSWORD);
+        }
+
+        user.updatePassword(passwordEncoder.encode(request.newPassword()));
     }
 
     private void validateNotBlankIfPresent(String value, String message) {

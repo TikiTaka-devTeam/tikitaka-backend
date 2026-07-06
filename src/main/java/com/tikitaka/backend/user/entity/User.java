@@ -85,6 +85,10 @@ public class User {
         this.profileUrl = profileUrl;
     }
 
+    public void updatePassword(String password) {
+        this.password = password;
+    }
+
     public void updateProfile(String name, String phoneNumber, String major) {
         if (name != null) {
             this.name = name;

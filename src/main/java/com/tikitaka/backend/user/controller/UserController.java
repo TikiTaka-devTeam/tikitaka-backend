@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.tikitaka.backend.global.config.SwaggerConfig;
 import com.tikitaka.backend.global.config.security.CurrentUserProvider;
 import com.tikitaka.backend.global.storage.S3StorageService;
+import com.tikitaka.backend.user.dto.UserChangePasswordRequest;
+import com.tikitaka.backend.user.dto.UserChangePasswordResponse;
 import com.tikitaka.backend.user.dto.UserProfileResponse;
 import com.tikitaka.backend.user.dto.UserProfileUpdateRequest;
 import com.tikitaka.backend.user.entity.User;
@@ -79,5 +81,28 @@ public class UserController {
         String profileUrl = s3StorageService.toCloudFrontUrl(updatedUser.getProfileUrl());
 
         return ResponseEntity.ok(UserProfileResponse.from(updatedUser, profileUrl));
+    }
+
+    @PatchMapping("/password")
+    @Operation(
+        summary = "비밀번호 변경",
+        description = "현재 로그인한 사용자의 비밀번호를 변경합니다."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "비밀번호 변경 성공",
+            content = @Content(schema = @Schema(implementation = UserChangePasswordResponse.class))
+        ),
+        @ApiResponse(responseCode = "400", description = "유효하지 않은 입력값"),
+        @ApiResponse(responseCode = "401", description = "유효하지 않은 액세스 토큰"),
+        @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
+    })
+    public ResponseEntity<UserChangePasswordResponse> changePassword(
+        @RequestBody @Valid UserChangePasswordRequest request
+    ) {
+        User currentUser = currentUserProvider.getCurrentUser();
+        userService.changePassword(currentUser.getId(), request);
+        return ResponseEntity.ok(new UserChangePasswordResponse("비밀번호가 변경되었습니다."));
     }
 }

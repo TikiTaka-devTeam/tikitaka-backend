@@ -62,6 +62,9 @@ public class AuthController {
 
     // 로그아웃
     @PostMapping("/logout")
+    @Operation(
+        summary = "로그아웃"
+    )
     public ResponseEntity<Void> logout(
         @RequestHeader("Authorization") String authHeader
     ) {
