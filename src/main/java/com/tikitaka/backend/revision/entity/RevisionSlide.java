@@ -68,4 +68,9 @@ public class RevisionSlide {
         this.targetSlide = targetSlide;
         this.insertAfterSlide = null;
     }
+
+    public void assignInsertAfterSlide(Slide insertAfterSlide) {
+        this.insertAfterSlide = insertAfterSlide;
+        this.targetSlide = null;
+    }
 }
