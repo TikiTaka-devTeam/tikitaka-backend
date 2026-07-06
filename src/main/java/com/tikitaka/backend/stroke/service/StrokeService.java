@@ -80,6 +80,31 @@ public class StrokeService {
         return new GetPrivateStrokesResponse(slideId, slide.getImageUrl(), strokes);
     }
 
+    @Transactional(readOnly = true)
+    public PreviousPrivateStrokesResponse getPreviousPrivateStrokes(UUID slideId, UUID userId) {
+        Slide slide = findSlide(slideId);
+        User user = findUser(userId);
+
+        Slide targetSlide = slide.getOriginalSlide() != null
+                ? slide.getOriginalSlide()
+                : slide;
+
+        List<StrokeResponse> strokes = privateLayerRepository.findBySlideAndUser(targetSlide, user)
+                .map(layer -> privateStrokeRepository.findByLayerAndIsDeletedFalseOrderByStrokeOrderAsc(layer)
+                        .orElse(Collections.emptyList()))
+                .orElse(Collections.emptyList())
+                .stream()
+                .map(StrokeResponse::from)
+                .toList();
+
+        return new PreviousPrivateStrokesResponse(
+                targetSlide.getId(),
+                "WHITE",
+                "삭제 또는 교체된 슬라이드의 이전 필기입니다.",
+                strokes
+        );
+    }
+
     @Transactional
     public DeleteStrokeResponse deletePrivateStroke(UUID strokeId, UUID userId) {
         PrivateStroke stroke = privateStrokeRepository.findById(strokeId)
@@ -113,15 +138,15 @@ public class StrokeService {
                         throw new CustomException(ErrorCode.Q_POINT_NOT_ALLOWED);
                     }
                     return sharedStrokeRepository.save(
-                        SharedStroke.builder()
-                                .layer(layer)
-                                .tool(req.getTool().name())
-                                .points(toJson(req.getPoints()))
-                                .content(req.getContent())
-                                .color(req.getColor() != null ? req.getColor() : "#000000")
-                                .thickness(req.getThickness() != null ? req.getThickness() : 2.0f)
-                                .strokeOrder(req.getStrokeOrder() != null ? req.getStrokeOrder() : 0)
-                                .build()
+                            SharedStroke.builder()
+                                    .layer(layer)
+                                    .tool(req.getTool().name())
+                                    .points(toJson(req.getPoints()))
+                                    .content(req.getContent())
+                                    .color(req.getColor() != null ? req.getColor() : "#000000")
+                                    .thickness(req.getThickness() != null ? req.getThickness() : 2.0f)
+                                    .strokeOrder(req.getStrokeOrder() != null ? req.getStrokeOrder() : 0)
+                                    .build()
                     );
                 }).toList();
 

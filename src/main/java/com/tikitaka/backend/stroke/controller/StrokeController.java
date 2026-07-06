@@ -10,6 +10,7 @@ import com.tikitaka.backend.slide.repository.SlideRepository;
 import com.tikitaka.backend.stroke.dto.DeleteStrokeResponse;
 import com.tikitaka.backend.stroke.dto.GetPrivateStrokesResponse;
 import com.tikitaka.backend.stroke.dto.GetSharedStrokesResponse;
+import com.tikitaka.backend.stroke.dto.PreviousPrivateStrokesResponse;
 import com.tikitaka.backend.stroke.dto.SaveStrokesRequest;
 import com.tikitaka.backend.stroke.dto.SaveStrokesResponse;
 import com.tikitaka.backend.stroke.dto.SharedStrokeMessage;
@@ -86,6 +87,31 @@ public class StrokeController {
 
         GetPrivateStrokesResponse response =
                 strokeService.getPrivateStrokes(slideId, userId);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/api/v1/slides/{slide_id}/previous-private-strokes")
+    @Operation(
+            summary = "삭제/교체 전 슬라이드의 이전 개인 필기 조회",
+            description = "삭제 또는 교체된 슬라이드의 이전 개인 필기를 흰 배경 기준으로 조회합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = PreviousPrivateStrokesResponse.class))),
+            @ApiResponse(responseCode = "401", description = "인증 실패",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "슬라이드를 찾을 수 없음",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = GlobalExceptionHandler.ErrorResponse.class)))
+    })
+    public ResponseEntity<PreviousPrivateStrokesResponse> getPreviousPrivateStrokes(
+            @Parameter(hidden = true) @RequestHeader("Authorization") String authHeader,
+            @Parameter(description = "슬라이드 ID") @PathVariable("slide_id") UUID slideId
+    ) {
+        UUID userId = extractUserId(authHeader);
+
+        PreviousPrivateStrokesResponse response =
+                strokeService.getPreviousPrivateStrokes(slideId, userId);
 
         return ResponseEntity.ok(response);
     }
