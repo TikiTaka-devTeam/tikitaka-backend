@@ -2,43 +2,46 @@ package com.tikitaka.backend.question.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.tikitaka.backend.question.entity.Question;
-import lombok.Builder;
-import lombok.Getter;
 
 import java.util.UUID;
 
-@Getter
-@Builder
-public class QuestionListResponse {
+public record QuestionListResponse(
+        @JsonProperty("question_id")
+        UUID questionId,
 
-    @JsonProperty("question_id")
-    private UUID questionId;
+        String content,
 
-    private String content;
+        @JsonProperty("refined_content")
+        String refinedContent,
 
-    @JsonProperty("refined_content")
-    private String refinedContent;
+        @JsonProperty("like_count")
+        Integer likeCount,
 
-    @JsonProperty("like_count")
-    private Integer likeCount;
+        @JsonProperty("liked_by_me")
+        Boolean likedByMe,
 
-    @JsonProperty("x_ratio")
-    private Float xRatio;
+        @JsonProperty("x_ratio")
+        Float xRatio,
 
-    @JsonProperty("y_ratio")
-    private Float yRatio;
+        @JsonProperty("y_ratio")
+        Float yRatio,
 
-    private String status;
-
+        String status
+) {
     public static QuestionListResponse from(Question question) {
-        return QuestionListResponse.builder()
-                .questionId(question.getId())
-                .content(question.getContent())
-                .refinedContent(question.getRefinedContent())
-                .likeCount(question.getLikeCount())
-                .xRatio(question.getXRatio())
-                .yRatio(question.getYRatio())
-                .status(question.getStatus().name())
-                .build();
+        return from(question, false);
+    }
+
+    public static QuestionListResponse from(Question question, Boolean likedByMe) {
+        return new QuestionListResponse(
+                question.getId(),
+                question.getContent(),
+                question.getRefinedContent(),
+                question.getLikeCount(),
+                likedByMe,
+                question.getXRatio(),
+                question.getYRatio(),
+                question.getStatus().name()
+        );
     }
 }
