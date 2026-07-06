@@ -84,4 +84,16 @@ public class User {
     public void updateProfileUrl(String profileUrl) {
         this.profileUrl = profileUrl;
     }
+
+    public void updateProfile(String name, String phoneNumber, String major) {
+        if (name != null) {
+            this.name = name;
+        }
+        if (phoneNumber != null) {
+            this.phoneNumber = phoneNumber;
+        }
+        if (major != null) {
+            this.major = major;
+        }
+    }
 }

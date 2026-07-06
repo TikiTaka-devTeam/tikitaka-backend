@@ -2,6 +2,8 @@ package com.tikitaka.backend.user.controller;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -9,7 +11,9 @@ import com.tikitaka.backend.global.config.SwaggerConfig;
 import com.tikitaka.backend.global.config.security.CurrentUserProvider;
 import com.tikitaka.backend.global.storage.S3StorageService;
 import com.tikitaka.backend.user.dto.UserProfileResponse;
+import com.tikitaka.backend.user.dto.UserProfileUpdateRequest;
 import com.tikitaka.backend.user.entity.User;
+import com.tikitaka.backend.user.service.UserService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -18,6 +22,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -29,6 +34,7 @@ public class UserController {
 
     private final CurrentUserProvider currentUserProvider;
     private final S3StorageService s3StorageService;
+    private final UserService userService;
 
     @GetMapping
     @Operation(
@@ -48,5 +54,30 @@ public class UserController {
         User currentUser = currentUserProvider.getCurrentUser();
         String profileUrl = s3StorageService.toCloudFrontUrl(currentUser.getProfileUrl());
         return ResponseEntity.ok(UserProfileResponse.from(currentUser, profileUrl));
+    }
+
+    @PatchMapping
+    @Operation(
+        summary = "내 프로필 수정",
+        description = "현재 로그인한 사용자의 이름, 전화번호, 전공을 수정합니다. 프로필 이미지는 별도 프로필 이미지 API로 수정합니다."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "내 프로필 수정 성공",
+            content = @Content(schema = @Schema(implementation = UserProfileResponse.class))
+        ),
+        @ApiResponse(responseCode = "400", description = "유효하지 않은 입력값"),
+        @ApiResponse(responseCode = "401", description = "유효하지 않은 액세스 토큰"),
+        @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
+    })
+    public ResponseEntity<UserProfileResponse> updateMyProfile(
+        @RequestBody @Valid UserProfileUpdateRequest request
+    ) {
+        User currentUser = currentUserProvider.getCurrentUser();
+        User updatedUser = userService.updateMyProfile(currentUser.getId(), request);
+        String profileUrl = s3StorageService.toCloudFrontUrl(updatedUser.getProfileUrl());
+
+        return ResponseEntity.ok(UserProfileResponse.from(updatedUser, profileUrl));
     }
 }
