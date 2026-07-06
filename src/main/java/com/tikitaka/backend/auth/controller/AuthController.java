@@ -62,6 +62,9 @@ public class AuthController {
 
     // 로그아웃
     @PostMapping("/logout")
+    @Operation(
+        summary = "로그아웃"
+    )
     public ResponseEntity<Void> logout(
         @RequestHeader("Authorization") String authHeader
     ) {
@@ -109,7 +112,7 @@ public class AuthController {
     
     @PostMapping("/profile-image/presigned-url")
     @Operation(
-        summary = "프로필 이미지 수정용 Presigned URL 발급",
+        summary = "프로필 이미지 수정용 Presigned URL(임시 업로드 링크) 발급",
         description = "로그인 사용자의 프로필 이미지 수정을 위한 S3 직접 업로드 URL을 반환"
     )
     public ResponseEntity<ProfileImagePresignedUrlResponse> createProfileImageForUpdate(
@@ -125,7 +128,7 @@ public class AuthController {
     // 프로필 이미지 수정 확정
     @PostMapping("/profile-image")
     @Operation(
-        summary = "프로필 이미지 수정 확정",
+        summary = "프로필 이미지 수정 이후, 이전 이미지 삭제 요청",
         description = "S3 업로드 완료 후 object key로 사용자 profile_url을 갱신하고 이전 이미지를 삭제"
     )
     public ResponseEntity<ProfileImageResponse> uploadProfileImage(
