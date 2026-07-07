@@ -16,6 +16,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import com.tikitaka.backend.document.entity.Document;
 import com.tikitaka.backend.document.repository.DocumentRepository;
 import com.tikitaka.backend.global.storage.S3StorageService;
+import com.tikitaka.backend.notification.service.NotificationService;
 import com.tikitaka.backend.space.dto.DocumentSummaryResponse;
 
 import com.tikitaka.backend.slide.dto.PdfSlideConvertResult;
@@ -80,6 +81,7 @@ public class SpaceService {
     private final ScheduleRepository scheduleRepository;
     private final SpaceMemberRepository spaceMemberRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     @Transactional(readOnly = true)
     public List<SpaceSummaryResponse> getMySpaces(UUID userId) {
@@ -308,7 +310,12 @@ public class SpaceService {
 
     public SpaceMemberStatusResponse approveSpaceMember(UUID professorId, UUID spaceId, UUID memberId) {
         SpaceMember member = getProfessorOwnedSpaceMember(professorId, spaceId, memberId);
+        boolean alreadyApproved = "APPROVED".equals(member.getValidity());
         member.approve(OffsetDateTime.now(ZoneOffset.UTC));
+
+        if (!alreadyApproved) {
+            notificationService.createInvitationAcceptedNotification(member);
+        }
 
         return new SpaceMemberStatusResponse(
             member.getId(),
