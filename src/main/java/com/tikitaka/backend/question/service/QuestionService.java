@@ -1,11 +1,14 @@
 package com.tikitaka.backend.question.service;
 
 import com.tikitaka.backend.global.config.security.CurrentUserProvider;
+import com.tikitaka.backend.question.ai.OpenAiClient;
 import com.tikitaka.backend.question.answer.Answer;
+import com.tikitaka.backend.question.audio.AnswerAudioFile;
 import com.tikitaka.backend.question.dto.*;
 import com.tikitaka.backend.question.entity.Question;
 import com.tikitaka.backend.question.entity.QuestionLike;
 import com.tikitaka.backend.question.enums.QuestionStatus;
+import com.tikitaka.backend.question.repository.AnswerAudioFileRepository;
 import com.tikitaka.backend.question.repository.AnswerRepository;
 import com.tikitaka.backend.question.repository.QuestionLikeRepository;
 import com.tikitaka.backend.question.repository.QuestionRepository;
@@ -29,9 +32,11 @@ public class QuestionService {
 
     private final QuestionRepository questionRepository;
     private final AnswerRepository answerRepository;
+    private final AnswerAudioFileRepository answerAudioFileRepository;
     private final SlideRepository slideRepository;
     private final PrivateStrokeRepository privateStrokeRepository;
     private final QuestionLikeRepository questionLikeRepository;
+    private final OpenAiClient openAiClient;
     private final CurrentUserProvider currentUserProvider;
     private final SimpMessagingTemplate messagingTemplate;
 
@@ -182,6 +187,105 @@ public class QuestionService {
         question.markAsAnswered();
 
         return AnswerCreateResponse.from(savedAnswer);
+    }
+
+    @Transactional
+    public AnswerUpdateResponse updateAnswer(
+            UUID answerId,
+            AnswerUpdateRequest request
+    ) {
+        User currentUser = currentUserProvider.getCurrentUser();
+
+        if (!isProfessor(currentUser)) {
+            throw new IllegalStateException("교수만 답변을 수정할 수 있습니다.");
+        }
+
+        Answer answer = answerRepository.findById(answerId)
+                .orElseThrow(() -> new IllegalArgumentException("답변을 찾을 수 없습니다."));
+
+        if (!"PROFESSOR".equals(answer.getAnswererType())) {
+            throw new IllegalStateException("교수 답변만 수정할 수 있습니다.");
+        }
+
+        if (request.content() == null || request.content().isBlank()) {
+            throw new IllegalArgumentException("답변 내용은 비어 있을 수 없습니다.");
+        }
+
+        answer.updateContent(request.content());
+
+        return AnswerUpdateResponse.from(answer);
+    }
+
+    @Transactional
+    public AnswerAudioCreateResponse createAnswerAudio(
+            UUID answerId,
+            AnswerAudioCreateRequest request
+    ) {
+        User currentUser = currentUserProvider.getCurrentUser();
+
+        if (!isProfessor(currentUser)) {
+            throw new IllegalStateException("교수만 음성 답변을 등록할 수 있습니다.");
+        }
+
+        Answer answer = answerRepository.findById(answerId)
+                .orElseThrow(() -> new IllegalArgumentException("답변을 찾을 수 없습니다."));
+
+        if (!"PROFESSOR".equals(answer.getAnswererType())) {
+            throw new IllegalStateException("교수 답변에만 음성 답변을 등록할 수 있습니다.");
+        }
+
+        if (request.audioUrl() == null || request.audioUrl().isBlank()) {
+            throw new IllegalArgumentException("음성 파일 URL은 비어 있을 수 없습니다.");
+        }
+
+        AnswerAudioFile audioFile = AnswerAudioFile.builder()
+                .answer(answer)
+                .audioUrl(request.audioUrl())
+                .build();
+
+        AnswerAudioFile savedAudioFile = answerAudioFileRepository.save(audioFile);
+
+        return AnswerAudioCreateResponse.from(savedAudioFile);
+    }
+
+    @Transactional
+    public AiAnswerCreateResponse createAiAnswer(UUID questionId) {
+        User currentUser = currentUserProvider.getCurrentUser();
+
+        if (!isProfessor(currentUser)) {
+            throw new IllegalStateException("교수만 AI 자동 답변을 생성할 수 있습니다.");
+        }
+
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new IllegalArgumentException("질문을 찾을 수 없습니다."));
+
+        if (answerRepository.existsByQuestionId(questionId)) {
+            throw new IllegalStateException("이미 답변이 작성된 질문입니다.");
+        }
+
+        String lectureContext = "";
+        String aiAnswerContent = openAiClient.generateAnswer(question.getContent(), lectureContext);
+
+        Answer answer = Answer.builder()
+                .question(question)
+                .professor(null)
+                .answererType("AI")
+                .content(aiAnswerContent)
+                .aiModel(openAiClient.getModel())
+                .build();
+
+        Answer savedAnswer = answerRepository.save(answer);
+
+        question.markAsAnswered();
+
+        return AiAnswerCreateResponse.from(savedAnswer);
+    }
+
+    public AnswerAudioSttStatusResponse getAnswerAudioSttStatus(UUID audioFileId) {
+        AnswerAudioFile audioFile = answerAudioFileRepository.findById(audioFileId)
+                .orElseThrow(() -> new IllegalArgumentException("음성 답변 파일을 찾을 수 없습니다."));
+
+        return AnswerAudioSttStatusResponse.from(audioFile);
     }
 
     private void publishQuestionCreated(Question question) {
