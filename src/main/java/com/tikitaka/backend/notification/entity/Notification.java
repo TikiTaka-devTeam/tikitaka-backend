@@ -2,6 +2,7 @@ package com.tikitaka.backend.notification.entity;
 
 import com.tikitaka.backend.document.entity.Document;
 import com.tikitaka.backend.question.answer.Answer;
+import com.tikitaka.backend.space.entity.Space;
 import com.tikitaka.backend.space.entity.SpaceNotice;
 import com.tikitaka.backend.user.entity.User;
 import jakarta.persistence.*;
@@ -40,6 +41,10 @@ public class Notification {
     @JoinColumn(name = "notice_id")
     private SpaceNotice notice;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "space_id")
+    private Space space;
+
     @Column(name = "type", length = 50, nullable = false)
     private String type;
 
@@ -53,5 +58,9 @@ public class Notification {
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
+    }
+
+    public void markAsRead() {
+        this.isRead = true;
     }
 }

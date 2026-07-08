@@ -44,3 +44,4 @@ out/
 postman/
 
 src/main/resources/application-local.properties
+tikitaka-firebase-adminsdk.json

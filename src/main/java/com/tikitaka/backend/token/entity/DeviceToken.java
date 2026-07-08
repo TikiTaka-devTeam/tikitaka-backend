@@ -32,7 +32,8 @@ public class DeviceToken {
  
     // ANDROID | IOS | WEB
     @Column(name = "device_type", length = 20, nullable = false)
-    private String deviceType;
+    @Enumerated(EnumType.STRING)
+    private DeviceType deviceType;
  
     // 현재 유효한 토큰 여부 (로그아웃 시 FALSE 처리)
     @Column(name = "is_active", nullable = false)
@@ -55,5 +56,14 @@ public class DeviceToken {
     @PreUpdate
     protected void onUpdate() {
         this.updatedAt = LocalDateTime.now();
+    }
+
+    public void reactivate(DeviceType deviceType) {
+        this.deviceType = deviceType;
+        this.isActive = true;
+    }
+
+    public void deactivate() {
+        this.isActive = false;
     }
 }
