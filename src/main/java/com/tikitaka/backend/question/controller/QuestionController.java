@@ -107,4 +107,50 @@ public class QuestionController {
     ) {
         return questionService.createAnswer(questionId, request);
     }
+
+    @Operation(
+            summary = "교수 답변 수정",
+            description = "교수가 이미 작성한 답변 내용을 수정합니다. 교수 답변만 수정할 수 있습니다."
+    )
+    @PatchMapping("/answers/{answerId}")
+    public AnswerUpdateResponse updateAnswer(
+            @PathVariable UUID answerId,
+            @RequestBody AnswerUpdateRequest request
+    ) {
+        return questionService.updateAnswer(answerId, request);
+    }
+
+    @Operation(
+            summary = "음성 답변 등록",
+            description = "교수가 작성한 답변에 음성 파일 URL을 등록합니다. 등록 직후 STT 상태는 PENDING입니다."
+    )
+    @PostMapping("/answers/{answerId}/audio")
+    public AnswerAudioCreateResponse createAnswerAudio(
+            @PathVariable UUID answerId,
+            @RequestBody AnswerAudioCreateRequest request
+    ) {
+        return questionService.createAnswerAudio(answerId, request);
+    }
+
+    @Operation(
+            summary = "음성 답변 STT 처리 상태 조회",
+            description = "음성 답변 파일의 STT 처리 상태를 조회합니다. PENDING, DONE, FAILED 상태와 STT 결과 텍스트를 반환합니다."
+    )
+    @GetMapping("/answer-audio-files/{audioFileId}/stt")
+    public AnswerAudioSttStatusResponse getAnswerAudioSttStatus(
+            @PathVariable UUID audioFileId
+    ) {
+        return questionService.getAnswerAudioSttStatus(audioFileId);
+    }
+
+    @Operation(
+            summary = "AI 자동 답변 생성",
+            description = "질문 내용을 기반으로 OpenAI를 호출하여 AI 자동 답변을 생성합니다. 생성된 답변은 AI 답변으로 저장됩니다."
+    )
+    @PostMapping("/questions/{questionId}/ai-answer")
+    public AiAnswerCreateResponse createAiAnswer(
+            @PathVariable UUID questionId
+    ) {
+        return questionService.createAiAnswer(questionId);
+    }
 }
